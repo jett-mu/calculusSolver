@@ -26,6 +26,7 @@
       <nav class="tabs" role="tablist" aria-label="Sections">
         <button role="tab" class="tab-btn" data-tab="derive" aria-selected="true">Derivatives</button>
         <button role="tab" class="tab-btn" data-tab="integrate" aria-selected="false">Integrals</button>
+        <button role="tab" class="tab-btn" data-tab="definite" aria-selected="false">Definite<span class="tab-long"> Integrals</span></button>
         <button role="tab" class="tab-btn" data-tab="library" aria-selected="false">Rule Library</button>
         <button role="tab" class="tab-btn" data-tab="map" aria-selected="false">Proof Map</button>
       </nav>
@@ -107,13 +108,7 @@
       <div class="derive-grid">
       <div class="card calc">
         <div class="input-row">
-          <div class="int-limits" title="Fill in both limits for a definite integral; leave both empty for an indefinite one">
-            <input id="ihi" class="bound" type="text" inputmode="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-                   placeholder="b" aria-label="Upper limit (leave both limits empty for an indefinite integral)">
-            <div class="int-sign" aria-hidden="true">∫</div>
-            <input id="ilo" class="bound" type="text" inputmode="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-                   placeholder="a" aria-label="Lower limit (leave both limits empty for an indefinite integral)">
-          </div>
+          <div class="ddx int-sign" aria-hidden="true">∫</div>
           <div class="input-wrap">
             <div id="ifx"></div>
             <input id="ifxText" type="text" inputmode="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
@@ -143,10 +138,7 @@
             <div><code>sin^3 x</code>, <code>cos^2 x</code>, <code>sec^3 x</code>, <code>sin(3x)cos(2x)</code></div><div>trig powers, half-angle, reduction, product-to-sum</div>
             <div><code>sqrt(1-x^2)</code>, <code>sqrt(x^2+1)</code>, <code>1/(x^2+1)^2</code></div><div>trigonometric substitution</div>
             <div><code>1/(1+cos x)</code>, <code>1/(2+sin x)</code></div><div>tangent half-angle substitution</div>
-            <div>Fill in both limits around the <span class="sw">∫</span>, e.g. <code>0</code> and <code>pi/2</code>; leave both empty for an antiderivative</div><div>definite integrals (FTC)</div>
-            <div><code>inf</code>, <code>-inf</code>, <code>∞</code> as a limit; integrands that blow up at a point</div><div>improper integrals</div>
-            <div><code>x^3 cos x</code> on [−1, 1], <code>e^(-x^2)</code> on (−∞, ∞), <code>sin x / x</code> on [0, ∞)</div><div>symmetry and famous integrals</div>
-            <div><code>e^(-x^2)</code> on [0, 1], <code>sin(x^2)</code></div><div>numerical, with Riemann sums</div>
+            <div>Need a number? Use the <button class="linkish" type="button" data-goto="definite" data-carry>Definite Integrals</button> tab</div><div>areas, F(b) − F(a)</div>
             <div>Input works the same as for derivatives: <kbd>/</kbd> fraction, <kbd>^</kbd> exponent, <kbd>Tab</kbd> autocomplete</div><div>input</div>
           </div>
         </details>
@@ -165,6 +157,67 @@
       </aside>
 
       <div id="ioutput" class="output"></div>
+      </div>
+    </section>
+
+    <!-- ========== DEFINITE INTEGRALS ========== -->
+    <section class="tab-panel" id="tab-definite" role="tabpanel" hidden>
+      <div class="derive-grid">
+      <div class="card calc">
+        <div class="input-row">
+          <div class="int-limits" title="Upper limit above, lower limit below">
+            <input id="dhi" class="bound" type="text" inputmode="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+                   placeholder="b" aria-label="Upper limit">
+            <div class="int-sign" aria-hidden="true">∫</div>
+            <input id="dlo" class="bound" type="text" inputmode="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+                   placeholder="a" aria-label="Lower limit">
+          </div>
+          <div class="input-wrap">
+            <div id="dfx"></div>
+            <input id="dfxText" type="text" inputmode="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+                   placeholder="Type an integrand, e.g. x^2" aria-label="Function to integrate (plain text)" hidden>
+            <button class="mode-btn" id="dmodeBtn" type="button" aria-pressed="false" title="Switch to plain-text input">Text</button>
+          </div>
+          <div class="ddx int-dx" id="ddLabel" aria-hidden="true"></div>
+          <div class="opts">
+            <label class="opt">
+              <span>w.r.t.</span>
+              <select id="dvarSel" aria-label="Variable of integration">
+                <option value="x">x</option><option value="t">t</option><option value="y">y</option>
+                <option value="z">z</option><option value="u">u</option><option value="s">s</option>
+                <option value="theta">θ</option>
+              </select>
+            </label>
+          </div>
+        </div>
+        <div class="preview" id="dpreview" aria-live="polite"></div>
+        <details class="syntax">
+          <summary>Limits &amp; methods</summary>
+          <div class="syntax-grid">
+            <div>Type the upper limit above the <span class="sw">∫</span> and the lower limit below it: numbers, <code>pi/2</code>, <code>e</code>, <code>sqrt(2)</code>, <code>ln 3</code></div><div>limits</div>
+            <div><code>inf</code>, <code>-inf</code>, <code>∞</code>, or an integrand that blows up, like <code>1/sqrt(x)</code> on [0, 1]</div><div>improper integrals</div>
+            <div><code>x^2</code> on [0, 1], <code>sin x</code> on [0, π]: an antiderivative, then F(b) − F(a)</div><div>Fundamental Theorem</div>
+            <div><code>x^3 cos x</code> on [−1, 1]</div><div>odd symmetry → 0</div>
+            <div><code>e^(-x^2)</code> on (−∞, ∞), <code>sin x / x</code> on [0, ∞)</div><div>famous integrals</div>
+            <div><code>e^(-x^2)</code> on [0, 1], <code>sin(x^2)</code></div><div>numerical, with Riemann sums</div>
+            <div>A lower limit above the upper one flips the sign</div><div>reversed limits</div>
+          </div>
+        </details>
+      </div>
+      <div id="danswer" class="answer-slot"></div>
+
+      <aside class="side" aria-label="Rules and examples">
+        <section class="side-card card" aria-labelledby="drulesTitle">
+          <div class="side-head"><h2 id="drulesTitle">Rules used</h2><span class="side-meta" id="drulesMeta"></span></div>
+          <ol class="rule-list" id="druleList"></ol>
+        </section>
+        <details class="side-card card" id="dexPanel" open>
+          <summary class="side-head"><h2>Examples</h2><span class="side-meta">click to load</span></summary>
+          <div class="ex-list" id="dexamples"></div>
+        </details>
+      </aside>
+
+      <div id="doutput" class="output"></div>
       </div>
     </section>
 

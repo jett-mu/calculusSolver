@@ -50,7 +50,7 @@
   function makeSolver(cfg) {
     const ids = cfg.ids;
     const el = (name) => document.getElementById(ids[name]);
-    const S = { cfg, expr: cfg.defaultExpr, v: 'x', n: 1, lo: '', hi: '', field: null, textMode: false, timer: null, rm: { method: 'mid', n: 8 } };
+    const S = { cfg, expr: cfg.defaultExpr, v: 'x', n: 1, lo: cfg.defaultLo || '', hi: cfg.defaultHi || '', field: null, textMode: false, timer: null, rm: { method: 'mid', n: 8 } };
 
     const getSrc = () => (S.textMode ? el('text').value : S.field.getText());
     S.setSrc = (s) => {
@@ -115,9 +115,9 @@
       }
       if (!S.textMode) S.field.clearError();
       const v = S.v;
-      // limits of integration: both filled → definite; one filled → a hint, and the indefinite integral meanwhile
-      let bounds = null, boundHint = '';
-      if (cfg.hasBounds && (S.lo.trim() || S.hi.trim())) {
+      // limits of integration (definite tab): both are needed
+      let bounds = null;
+      if (cfg.hasBounds) {
         if (S.lo.trim() && S.hi.trim()) {
           try {
             bounds = { lo: Calc.parseBound(S.lo, v), hi: Calc.parseBound(S.hi, v) };
@@ -129,14 +129,19 @@
             return;
           }
         } else {
-          boundHint = `<span class="note">add the ${S.lo.trim() ? 'upper' : 'lower'} limit for a definite integral, or clear both</span>`;
+          const missing = !S.lo.trim() && !S.hi.trim() ? 'both limits' : S.lo.trim() ? 'the upper limit' : 'the lower limit';
+          pv.innerHTML = `<span class="lbl">Interpreted as</span> ${k('f(' + vtex(v) + ') = ' + Calc.tex(tree))}`;
+          ans.innerHTML = `<div class="card hint"><h2>Add ${missing}</h2><p>Type the upper limit above the ∫ and the lower limit below it, e.g. <code>0</code> and <code>pi</code>, or <code>inf</code> for an improper integral. For an antiderivative, use the <button class="linkish" type="button" data-goto="integrate">Integrals</button> tab.</p></div>`;
+          out.innerHTML = '';
+          S.renderRuleList(null);
+          return;
         }
       }
       S.bounds = bounds;
       const fName = 'f(' + vtex(v) + ')';
       const consts = Array.from(Calc.freeVars(tree)).filter((x) => x !== v);
       pv.innerHTML = `<span class="lbl">Interpreted as</span> ${k(fName + ' = ' + Calc.tex(tree))}` +
-        (bounds ? `<span class="note">on ${k(intervalTex(bounds.lo, bounds.hi, v))}</span>` : '') + boundHint +
+        (bounds ? `<span class="note">on ${k(intervalTex(bounds.lo, bounds.hi, v))}</span>` : '') +
         (consts.length ? `<span class="note">treating ${consts.map((c) => k(vtex(c))).join(', ')} as constant${consts.length > 1 ? 's' : ''}</span>` : '') +
         (!Calc.contains(tree, v) && !consts.length ? `<span class="note">(no ${k(vtex(v))} in this expression, so it is a constant)</span>` : '');
       let res;
@@ -547,35 +552,27 @@
       </div>`,
   });
 
+  const nonElemCard = (e) => `<div class="card hint"><h2>No elementary antiderivative</h2><p>${esc(e.message)} Elementary functions are those built from polynomials, roots, exponentials, logarithms and trig functions. No combination of them has this derivative (a theorem of Liouville).</p></div>`;
   const integrate = makeSolver({
     tab: 'integrate', hashKey: 'i', hasOrder: false, defaultExpr: 'x e^x',
-    ids: { field: 'ifx', text: 'ifxText', mode: 'imodeBtn', varSel: 'ivarSel', label: 'idxLabel', preview: 'ipreview', lo: 'ilo', hi: 'ihi',
+    ids: { field: 'ifx', text: 'ifxText', mode: 'imodeBtn', varSel: 'ivarSel', label: 'idxLabel', preview: 'ipreview',
       answer: 'ianswer', output: 'ioutput', ruleList: 'iruleList', rulesMeta: 'irulesMeta', examples: 'iexamples', exPanel: 'iexPanel' },
     examples: INT_EXAMPLES,
-    exampleGroups: [{ title: 'Definite & improper', items: DEF_EXAMPLES }, { title: 'Antiderivatives', items: INT_EXAMPLES }],
-    exampleTex: (t, it) => '\\int' + (it && it.lo !== undefined ? '_{' + boundTex(it.lo) + '}^{' + boundTex(it.hi) + '}' : '') + ' ' + intBody(t) + '\\,dx',
-    hasBounds: true,
+    exampleTex: (t) => '\\int ' + intBody(t) + '\\,dx',
     fieldLabel: 'Function to integrate',
     placeholder: 'Type an integrand, e.g. x e^x',
     labelTex: (S) => 'd' + vtex(S.v),
-    engine: (tree, v, n, S) => (S.bounds ? Calc.definite(tree, v, S.lo, S.hi) : Calc.integrate(tree, v)),
+    engine: (tree, v) => Calc.integrate(tree, v),
     emptyTitle: 'Type an integrand to begin',
     emptyText: 'Pick one from the examples, or try <code>x^2 e^x</code>, <code>1/(x^2-4)</code> or <code>sin^2 x cos^3 x</code>. Each step names the technique it uses. Click a technique to see why it works and which derivative rule it reverses.',
     rulesEmpty: 'Rules appear here once there is an integral.',
-    stepsNote: (res) => (res.definite
-      ? (res.antideriv ? 'The antiderivative leaves out + C: it would cancel in F(b) − F(a).' : '')
-      : 'Each step leaves out its own constant. They are all collected into the single + C in the result.'),
-    errorCard: (e) => e.undefinedRegion
-      ? `<div class="card hint"><h2>Undefined on this interval</h2><p>${esc(e.message)} Try an interval inside the integrand's domain.</p></div>`
-      : e.nonElementary
-      ? `<div class="card hint"><h2>No elementary antiderivative</h2><p>${esc(e.message)} Elementary functions are those built from polynomials, roots, exponentials, logarithms and trig functions. No combination of them has this derivative (a theorem of Liouville).</p></div>`
+    stepsNote: 'Each step leaves out its own constant. They are all collected into the single + C in the result.',
+    errorCard: (e) => e.nonElementary
+      ? nonElemCard(e).replace('</p></div>', ` For a number, try it on an interval in the <button class="linkish" type="button" data-goto="definite" data-carry>Definite Integrals</button> tab.</p></div>`)
       : `<div class="card hint"><h2>Couldn't integrate that</h2><p>${esc(e.message)} Try rewriting the integrand, or check whether it has an elementary antiderivative at all.</p></div>`,
-    afterAnswer: (tree, res, S, slot) => { if (res.definite) Riemann.mount(slot, tree, res, S); },
     answerCard: (tree, res, S) => {
-      if (res.definite) return definiteCard(tree, res, S);
       const v = S.v, vt = vtex(v);
-      const integrand = Calc.tex(tree);
-      const lhs = '\\int ' + (tree.type === 'add' ? '\\left(' + integrand + '\\right)' : integrand) + '\\,d' + vt;
+      const lhs = '\\int ' + intBody(tree) + '\\,d' + vt;
       let check = '';
       if (res.check) {
         let src = '';
@@ -592,17 +589,46 @@
       </div>`;
     },
   });
-  const solvers = { derive, integrate };
+
+  const definite = makeSolver({
+    tab: 'definite', hashKey: 'di', hasOrder: false, hasBounds: true, defaultExpr: 'x^2', defaultLo: '0', defaultHi: '1',
+    ids: { field: 'dfx', text: 'dfxText', mode: 'dmodeBtn', varSel: 'dvarSel', label: 'ddLabel', preview: 'dpreview', lo: 'dlo', hi: 'dhi',
+      answer: 'danswer', output: 'doutput', ruleList: 'druleList', rulesMeta: 'drulesMeta', examples: 'dexamples', exPanel: 'dexPanel' },
+    examples: DEF_EXAMPLES,
+    exampleTex: (t, it) => '\\int_{' + boundTex(it.lo) + '}^{' + boundTex(it.hi) + '} ' + intBody(t) + '\\,dx',
+    fieldLabel: 'Function to integrate between the limits',
+    placeholder: 'Type an integrand, e.g. x^2',
+    labelTex: (S) => 'd' + vtex(S.v),
+    engine: (tree, v, n, S) => Calc.definite(tree, v, S.lo, S.hi),
+    emptyTitle: 'Type an integrand to begin',
+    emptyText: 'Pick one from the examples, or try <code>x^2</code> from <code>0</code> to <code>1</code>, <code>e^(-x)</code> from <code>0</code> to <code>inf</code>, or <code>sin x</code> from <code>0</code> to <code>pi</code>. Each step names the rule it uses, and the Riemann-sum card shows the area.',
+    rulesEmpty: 'Rules appear here once there is a value.',
+    stepsNote: (res) => (res.antideriv ? 'The antiderivative leaves out + C: it would cancel in F(b) − F(a).' : ''),
+    errorCard: (e) => e.undefinedRegion
+      ? `<div class="card hint"><h2>Undefined on this interval</h2><p>${esc(e.message)} Try an interval inside the integrand's domain.</p></div>`
+      : e.nonElementary ? nonElemCard(e)
+      : `<div class="card hint"><h2>Couldn't evaluate that</h2><p>${esc(e.message)}</p></div>`,
+    afterAnswer: (tree, res, S, slot) => Riemann.mount(slot, tree, res, S),
+    answerCard: (tree, res, S) => definiteCard(tree, res, S),
+  });
+  const solvers = { derive, integrate, definite };
   const solverFor = (node) => Object.values(solvers).find((s) => s.owns(node));
 
   /* ---------------- state & routing ---------------- */
   const state = { tab: 'derive', rule: null };
   function readHash() {
     const p = new URLSearchParams(location.hash.slice(1));
-    state.tab = p.get('tab') || (p.has('i') ? 'integrate' : 'derive');
+    // older links put definite integrals on the integrals tab: #tab=integrate&i=…&lo=…&hi=…
+    const legacyDef = p.has('i') && (p.has('lo') || p.has('hi'));
+    state.tab = p.get('tab') || (p.has('di') ? 'definite' : p.has('i') ? 'integrate' : 'derive');
+    if (legacyDef && state.tab === 'integrate') state.tab = 'definite';
     if (p.has('d')) derive.expr = p.get('d');
-    if (p.has('i')) integrate.expr = p.get('i');
-    if (p.has('i') || p.has('lo') || p.has('hi')) { integrate.lo = p.get('lo') || ''; integrate.hi = p.get('hi') || ''; }
+    if (p.has('i') && !legacyDef) integrate.expr = p.get('i');
+    if (p.has('di') || legacyDef) {
+      definite.expr = p.get('di') || p.get('i');
+      definite.lo = p.get('lo') || '';
+      definite.hi = p.get('hi') || '';
+    }
     const active = solvers[state.tab];
     if (active && p.has('v')) active.v = p.get('v');
     if (p.has('n')) derive.n = Math.max(1, Math.min(4, parseInt(p.get('n'), 10) || 1));
@@ -617,8 +643,12 @@
       if (derive.n !== 1) p.set('n', derive.n);
     } else if (state.tab === 'integrate') {
       p.set('i', integrate.expr);
-      if (integrate.lo || integrate.hi) { p.set('lo', integrate.lo); p.set('hi', integrate.hi); }
       if (integrate.v !== 'x') p.set('v', integrate.v);
+    } else if (state.tab === 'definite') {
+      p.set('di', definite.expr);
+      p.set('lo', definite.lo);
+      p.set('hi', definite.hi);
+      if (definite.v !== 'x') p.set('v', definite.v);
     }
     if (state.rule) p.set('rule', state.rule);
     const h = '#' + p.toString();
@@ -659,7 +689,7 @@
       <h2 id="drawerTitle">${esc(r.name)}</h2>
       <div class="statement cat-${r.cat}">${k(r.statement, true)}</div>
       <p class="summary">${rich(r.summary)}</p>
-      ${r.example ? `<div class="drawer-actions"><button class="btn" data-try="${esc(r.example)}" data-try-tab="${isInt ? 'integrate' : 'derive'}"${tryBounds}>${tryLabel}</button></div>` : ''}
+      ${r.example ? `<div class="drawer-actions"><button class="btn" data-try="${esc(r.example)}" data-try-tab="${r.bounds ? 'definite' : isInt ? 'integrate' : 'derive'}"${tryBounds}>${tryLabel}</button></div>` : ''}
       <h3>Proof</h3>
       <div class="proof">${proofHTML(r.proof)}</div>
       <h3>Proved from</h3>
@@ -728,7 +758,7 @@
     closeRule();
     showTab(solver.cfg.tab);
     if (solver.cfg.hasOrder) solver.n = 1;
-    if (solver.cfg.hasBounds) solver.setBounds(bounds ? bounds[0] : '', bounds ? bounds[1] : '');
+    if (solver.cfg.hasBounds && bounds) solver.setBounds(bounds[0], bounds[1]);
     solver.v = v || 'x';
     solver.syncControls();
     solver.setSrc(src);
@@ -822,7 +852,12 @@
         return;
       }
       const go = t.closest('[data-goto]');
-      if (go) { showTab(go.dataset.goto); return; }
+      if (go) {
+        // "try it on an interval": bring the current integrand along
+        if (go.dataset.carry !== undefined && go.dataset.goto === 'definite') load(definite, integrate.expr, integrate.v, [definite.lo || '0', definite.hi || '1']);
+        else showTab(go.dataset.goto);
+        return;
+      }
       const tw = t.closest('.twisty');
       if (tw && !tw.classList.contains('leaf')) {
         const li = tw.closest('.step');

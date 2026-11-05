@@ -25,7 +25,7 @@ Every step names the rule it uses. Clicking a rule shows:
   - the tangent half-angle (Weierstrass) substitution
 
   Every candidate answer is differentiated numerically and compared with the integrand before it is shown. The result card also shows the symbolic derivative as a check, with a button that opens it in the derivative tab. Integrands with no elementary antiderivative (`e^(x^2)`, `sin x / x`, `1/ln x`, `x^x` and others) are recognized and named.
-- **Definite and improper integrals**: fill in the limits above and below the ∫ (e.g. `0` and `pi/2`; `inf`, `-inf` or `∞` for improper integrals). Leave both empty for an antiderivative. The routes, tried in this order:
+- **Definite and improper integrals** (their own tab): fill in the limits above and below the ∫ (e.g. `0` and `pi/2`; `inf`, `-inf` or `∞` for improper integrals). The routes, tried in this order:
   - odd symmetry on [−a, a], which gives 0 even without an antiderivative
   - the Fundamental Theorem of Calculus, using the antiderivative from the indefinite integrator. The interval is split where the integrand blows up or where the antiderivative formula jumps (e.g. tangent half-angle answers at x = π). ∞ limits and singular endpoints become limits of F, which are found numerically and then named exactly when recognized (π/2, √π, ln 2, …). Values at nice angles are exact (sin(π/6) = 1/2, arctan 1 = π/4).
   - a table of famous definite integrals: Gaussian, Dirichlet (sin x / x), sin²x/x², Gamma (xⁿe^(−ax) = n!/aⁿ⁺¹), x/(eˣ−1) = π²/6 and ln(sin x) on [0, π/2]
@@ -50,7 +50,7 @@ Every step names the rule it uses. Clicking a rule shows:
   - Integration basics (antiderivatives and +C, from the Mean Value Theorem), a table of common integrals, and integration techniques. Each is proved from the derivative rule it reverses.
   - Definite integrals: Riemann sums, the Fundamental Theorem of Calculus, properties and symmetry, improper integrals, numerical integration and the famous results above
 - **Proof Map**: a pan-and-zoom DAG of how every rule is proved from the others, tracing back to the definition of a limit.
-- **Shareable links**: links such as `#d=sin(x^2)`, `#tab=integrate&i=x%20e%5Ex`, `#tab=integrate&i=x%5E2&lo=0&hi=1`, `#rule=byParts` and `#tab=map` open the exact view.
+- **Shareable links**: links such as `#d=sin(x^2)`, `#tab=integrate&i=x%20e%5Ex`, `#tab=definite&di=x%5E2&lo=0&hi=1`, `#rule=byParts` and `#tab=map` open the exact view.
 - **Offline**: works offline and straight from `file://`. KaTeX is vendored in `vendor/katex/` and nothing else is loaded.
 
 ## Project layout
