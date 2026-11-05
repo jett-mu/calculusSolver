@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Calculus Solver — step-by-step derivatives and integrals</title>
+  <meta name="description" content="Differentiate and integrate single-variable functions step by step: substitution, integration by parts, partial fractions, trig integrals and more. Every rule links to its statement, a proof, and a map of how the rules are proved from one another.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23233a7a'/%3E%3Ctext x='32' y='46' font-family='Georgia,serif' font-size='40' font-style='italic' text-anchor='middle' fill='%23fff'%3E%E2%88%82%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="vendor/katex/katex.min.css">
+  <link rel="stylesheet" href="css/style.css">
+  <script>
+    // apply saved theme before paint
+    try { const t = localStorage.getItem('cs-theme'); if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) {}
+  </script>
+</head>
+<body>
+  <header class="top">
+    <div class="top-inner">
+      <a class="brand" href="#" aria-label="Calculus Solver home">
+        <span class="brand-mark" aria-hidden="true">∂</span>
+        <span class="brand-text">
+          <span class="brand-name">Calculus Solver</span>
+          <span class="brand-sub">Every step shown, every rule proved</span>
+        </span>
+      </a>
+      <nav class="tabs" role="tablist" aria-label="Sections">
+        <button role="tab" class="tab-btn" data-tab="derive" aria-selected="true">Derivatives</button>
+        <button role="tab" class="tab-btn" data-tab="integrate" aria-selected="false">Integrals</button>
+        <button role="tab" class="tab-btn" data-tab="library" aria-selected="false">Rule Library</button>
+        <button role="tab" class="tab-btn" data-tab="map" aria-selected="false">Proof Map</button>
+      </nav>
+      <button class="icon-btn theme-btn" id="themeBtn" title="Toggle light/dark theme" aria-label="Toggle theme">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M12 3a9 9 0 1 0 9 9c0-.46-.04-.92-.1-1.36a5.39 5.39 0 0 1-4.4 2.26 5.4 5.4 0 0 1-3.14-9.8c-.44-.06-.9-.1-1.36-.1z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main>
+    <!-- ========== DERIVATIVES ========== -->
+    <section class="tab-panel" id="tab-derive" role="tabpanel">
+      <div class="derive-grid">
+      <div class="card calc">
+        <div class="input-row">
+          <div class="ddx" id="ddxLabel" aria-hidden="true"></div>
+          <div class="input-wrap">
+            <div id="fx"></div>
+            <input id="fxText" type="text" inputmode="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+                   placeholder="Type a function, e.g. x^2 sin(x)" aria-label="Function to differentiate (plain text)" hidden>
+            <button class="mode-btn" id="modeBtn" type="button" aria-pressed="false" title="Switch to plain-text input">Text</button>
+          </div>
+          <div class="opts">
+            <label class="opt">
+              <span>w.r.t.</span>
+              <select id="varSel" aria-label="Variable">
+                <option value="x">x</option><option value="t">t</option><option value="y">y</option>
+                <option value="z">z</option><option value="u">u</option><option value="s">s</option>
+                <option value="theta">θ</option>
+              </select>
+            </label>
+            <label class="opt">
+              <span>order</span>
+              <select id="orderSel" aria-label="Derivative order">
+                <option value="1">1st</option><option value="2">2nd</option><option value="3">3rd</option><option value="4">4th</option>
+              </select>
+            </label>
+          </div>
+        </div>
+        <div class="preview" id="preview" aria-live="polite"></div>
+        <details class="syntax">
+          <summary>Input syntax &amp; keys</summary>
+          <div class="syntax-grid">
+            <div><kbd>/</kbd> fraction, <kbd>^</kbd> exponent, <kbd>_</kbd> log base, <kbd>(</kbd> <kbd>|</kbd> brackets</div><div>build structure as you type</div>
+            <div><kbd>Tab</kbd> or <kbd>→</kbd> accepts a suggestion, e.g. <code>arcs</code> → arcsin(▢)</div><div>autocomplete</div>
+            <div><kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd>, <kbd>Tab</kbd>, <kbd>Space</kbd> leaves an exponent</div><div>move between slots</div>
+            <div>Function names are colored by rule family: <span class="sw cat-trig">trig</span> <span class="sw cat-invtrig">inverse trig</span> <span class="sw cat-explog">exp &amp; log</span> <span class="sw cat-hyp">hyperbolic</span> <span class="sw cat-invhyp">inverse hyp.</span> <span class="sw cat-algebraic">roots &amp; abs</span></div><div>color key</div>
+            <div><code>x^2</code>, <code>x**2</code>, <code>x²</code></div><div>powers</div>
+            <div><code>2x</code>, <code>x sin x</code>, <code>(x+1)(x-1)</code></div><div>implicit multiplication</div>
+            <div><code>sin x^2</code> = sin(x²), <code>sin^2 x</code> = (sin x)²</div><div>function notation</div>
+            <div><code>sin^-1 x</code>, <code>arcsin</code>, <code>asin</code></div><div>inverse functions</div>
+            <div><code>sqrt(x)</code>, <code>cbrt(x)</code>, <code>√x</code></div><div>roots</div>
+            <div><code>e^x</code>, <code>exp(x)</code>, <code>ln x</code>, <code>log x</code> (base 10), <code>log_2(x)</code>, <code>log(b, x)</code></div><div>exponentials &amp; logs</div>
+            <div><code>|x|</code>, <code>abs(x)</code></div><div>absolute value</div>
+            <div><code>pi</code>, <code>π</code>, <code>e</code>; other letters like <code>a</code>, <code>k</code></div><div>constants</div>
+            <div><code>sinh cosh tanh coth sech csch</code>, <code>arsinh</code>…</div><div>hyperbolic</div>
+          </div>
+        </details>
+      </div>
+      <div id="answer" class="answer-slot"></div>
+
+      <aside class="side" aria-label="Rules and examples">
+        <section class="side-card card" aria-labelledby="rulesTitle">
+          <div class="side-head"><h2 id="rulesTitle">Rules used</h2><span class="side-meta" id="rulesMeta"></span></div>
+          <ol class="rule-list" id="ruleList"></ol>
+        </section>
+        <details class="side-card card" id="exPanel" open>
+          <summary class="side-head"><h2>Examples</h2><span class="side-meta">click to load</span></summary>
+          <div class="ex-list" id="examples"></div>
+        </details>
+      </aside>
+
+      <div id="output" class="output"></div>
+      </div>
+    </section>
+
+    <!-- ========== INTEGRALS ========== -->
+    <section class="tab-panel" id="tab-integrate" role="tabpanel" hidden>
+      <div class="derive-grid">
+      <div class="card calc">
+        <div class="input-row">
+          <div class="ddx int-sign" aria-hidden="true">∫</div>
+          <div class="input-wrap">
+            <div id="ifx"></div>
+            <input id="ifxText" type="text" inputmode="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+                   placeholder="Type an integrand, e.g. x e^x" aria-label="Function to integrate (plain text)" hidden>
+            <button class="mode-btn" id="imodeBtn" type="button" aria-pressed="false" title="Switch to plain-text input">Text</button>
+          </div>
+          <div class="ddx int-dx" id="idxLabel" aria-hidden="true"></div>
+          <div class="opts">
+            <label class="opt">
+              <span>w.r.t.</span>
+              <select id="ivarSel" aria-label="Variable of integration">
+                <option value="x">x</option><option value="t">t</option><option value="y">y</option>
+                <option value="z">z</option><option value="u">u</option><option value="s">s</option>
+                <option value="theta">θ</option>
+              </select>
+            </label>
+          </div>
+        </div>
+        <div class="preview" id="ipreview" aria-live="polite"></div>
+        <details class="syntax">
+          <summary>Techniques the integrator uses</summary>
+          <div class="syntax-grid">
+            <div><code>x^5</code>, <code>1/x</code>, <code>e^(3x)</code>, <code>sec x tan x</code>, <code>1/(x^2+4)</code></div><div>table of common integrals</div>
+            <div><code>x cos(x^2)</code>, <code>(ln x)/x</code>, <code>x sqrt(x+1)</code></div><div>u-substitution</div>
+            <div><code>x e^x</code>, <code>ln x</code>, <code>x^2 arctan x</code>, <code>e^x sin x</code></div><div>integration by parts (LIATE, cyclic)</div>
+            <div><code>(x^3+1)/(x^2+1)</code>, <code>1/(x^2(x+1))</code>, <code>1/(x^2+2x+5)</code></div><div>division, partial fractions, completing the square</div>
+            <div><code>sin^3 x</code>, <code>cos^2 x</code>, <code>sec^3 x</code>, <code>sin(3x)cos(2x)</code></div><div>trig powers, half-angle, reduction, product-to-sum</div>
+            <div><code>sqrt(1-x^2)</code>, <code>sqrt(x^2+1)</code>, <code>1/(x^2+1)^2</code></div><div>trigonometric substitution</div>
+            <div><code>1/(1+cos x)</code>, <code>1/(2+sin x)</code></div><div>tangent half-angle substitution</div>
+            <div>Input works the same as for derivatives: <kbd>/</kbd> fraction, <kbd>^</kbd> exponent, <kbd>Tab</kbd> autocomplete</div><div>input</div>
+          </div>
+        </details>
+      </div>
+      <div id="ianswer" class="answer-slot"></div>
+
+      <aside class="side" aria-label="Rules and examples">
+        <section class="side-card card" aria-labelledby="irulesTitle">
+          <div class="side-head"><h2 id="irulesTitle">Rules used</h2><span class="side-meta" id="irulesMeta"></span></div>
+          <ol class="rule-list" id="iruleList"></ol>
+        </section>
+        <details class="side-card card" id="iexPanel" open>
+          <summary class="side-head"><h2>Examples</h2><span class="side-meta">click to load</span></summary>
+          <div class="ex-list" id="iexamples"></div>
+        </details>
+      </aside>
+
+      <div id="ioutput" class="output"></div>
+      </div>
+    </section>
+
+    <!-- ========== LIBRARY ========== -->
+    <section class="tab-panel" id="tab-library" role="tabpanel" hidden>
+      <div class="lib-head">
+        <div>
+          <h2 class="section-title">Rule Library</h2>
+          <p class="section-sub">Every rule the solver uses, with its proof. Click a rule to read it.</p>
+        </div>
+        <input id="libSearch" type="search" placeholder="Search rules… (e.g. chain, arctan, cosh)" aria-label="Search rules">
+      </div>
+      <div id="library"></div>
+    </section>
+
+    <!-- ========== PROOF MAP ========== -->
+    <section class="tab-panel" id="tab-map" role="tabpanel" hidden>
+      <div class="lib-head">
+        <div>
+          <h2 class="section-title">Proof Map</h2>
+          <p class="section-sub">Each arrow points from a result to a rule proved using it. Everything flows from the ε–δ definition of a limit. Hover a rule to trace what it depends on and what depends on it; click it to read the proof.</p>
+        </div>
+      </div>
+      <div class="map-shell card">
+        <div class="map-toolbar">
+          <div class="legend" id="legend"></div>
+          <div class="zoom">
+            <button class="icon-btn" id="zoomOut" aria-label="Zoom out">−</button>
+            <button class="icon-btn" id="zoomFit" aria-label="Fit to screen">⤢</button>
+            <button class="icon-btn" id="zoomIn" aria-label="Zoom in">+</button>
+          </div>
+        </div>
+        <div class="map-canvas" id="mapCanvas"></div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <p>Angles are in radians. <code>log</code> without a base means base 10. Letters other than the chosen variable are treated as constants (and, for integrals, as positive).</p>
+  </footer>
+
+  <!-- ========== RULE DRAWER ========== -->
+  <div class="scrim" id="scrim" hidden></div>
+  <aside class="drawer" id="drawer" aria-hidden="true" aria-labelledby="drawerTitle" role="dialog">
+    <div class="drawer-bar">
+      <span class="cat-badge" id="drawerCat"></span>
+      <button class="icon-btn" id="drawerClose" aria-label="Close">✕</button>
+    </div>
+    <div class="drawer-body" id="drawerBody"></div>
+  </aside>
+
+  <script src="vendor/katex/katex.min.js"></script>
+  <script src="js/ast.js"></script>
+  <script src="js/parser.js"></script>
+  <script src="js/mathfield.js"></script>
+  <script src="js/simplify.js"></script>
+  <script src="js/derive.js"></script>
+  <script src="js/integrate.js"></script>
+  <script src="js/rules.js"></script>
+  <script src="js/proofmap.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
