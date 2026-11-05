@@ -18,9 +18,10 @@
     { id: 'intbasic', name: 'Integration Basics' },
     { id: 'inttable', name: 'Common Integrals' },
     { id: 'inttech', name: 'Integration Techniques' },
+    { id: 'intdef', name: 'Definite Integrals' },
   ];
   // categories whose examples are integrands (the rest are functions to differentiate)
-  const INT_CATS = new Set(['intbasic', 'inttable', 'inttech']);
+  const INT_CATS = new Set(['intbasic', 'inttable', 'inttech', 'intdef']);
 
   const RULES = [
     /* ======================= FOUNDATIONS ======================= */
@@ -1177,6 +1178,178 @@
         R`Since $x=2\arctan t$, $dx=\frac{2}{1+t^2}dt$. Every piece is now rational in $t$. $\blacksquare$`,
       ],
       example: '1/(1+cos x)',
+    },
+
+    /* ======================= DEFINITE INTEGRALS ======================= */
+    {
+      id: 'riemannDef', name: 'Definite Integral (Riemann Sums)', short: 'Riemann Sum', cat: 'intdef',
+      statement: R`\int_a^b f(x)\,dx = \lim_{n\to\infty}\sum_{i=1}^{n} f(x_i^{*})\,\Delta x,\qquad \Delta x=\frac{b-a}{n}`,
+      summary: 'The definite integral is the signed area under the curve: cut [a, b] into n strips, add up rectangles, and let the strips get thin.',
+      provedFrom: ['limit'],
+      proof: [
+        R`**Definition.** Split $[a,b]$ into $n$ equal strips of width $\Delta x=\frac{b-a}{n}$ with endpoints $x_i=a+i\,\Delta x$. In each strip pick a sample point $x_i^*$ and build a rectangle of height $f(x_i^*)$. The integral is the limit of the total area as $n\to\infty$, when that limit exists and does not depend on the choice of sample points.`,
+        R`**Common choices.** Left sums use $x_i^*=x_{i-1}$, right sums use $x_i^*=x_i$, midpoint sums use the middle of each strip. The trapezoid rule averages the left and right sums. All of them converge to the same number for a continuous $f$.`,
+        R`**Signed area.** Where $f<0$ the rectangles have negative height, so area below the axis counts as negative.`,
+        R`**Which functions are integrable?** Every continuous function on a closed interval is: on $[a,b]$ it is uniformly continuous, so the gap between the largest and smallest possible sums shrinks to $0$. (This is stated here, not proved.)`,
+        R`The Riemann-sum card on this site draws the rectangles and shows the sums converging.`,
+      ],
+      example: 'x^2', bounds: ['0', '1'],
+    },
+    {
+      id: 'ftc', name: 'Fundamental Theorem of Calculus', short: 'FTC', cat: 'intdef',
+      statement: R`\int_a^b f(x)\,dx = F(b) - F(a)\qquad\text{where } F' = f`,
+      summary: 'To find the area, find any antiderivative and subtract its values at the ends. The + C cancels.',
+      provedFrom: ['riemannDef', 'mvt', 'antideriv'],
+      proof: [
+        R`Let $F'=f$ on $[a,b]$, with $f$ continuous. Split $[a,b]$ at $a=x_0<x_1<\dots<x_n=b$. The difference $F(b)-F(a)$ **telescopes**:`,
+        R`$$F(b)-F(a)=\sum_{i=1}^{n}\bigl(F(x_i)-F(x_{i-1})\bigr).$$`,
+        R`By the Mean Value Theorem each term is $F'(c_i)(x_i-x_{i-1})=f(c_i)\,\Delta x$ for some $c_i$ in the $i$-th strip. So for **every** $n$,`,
+        R`$$F(b)-F(a)=\sum_{i=1}^{n} f(c_i)\,\Delta x,$$`,
+        R`which is a Riemann sum. As $n\to\infty$ the right side tends to $\int_a^b f(x)\,dx$, while the left side never changes. So they are equal. $\blacksquare$`,
+        R`**The constant cancels.** Using $F+C$ instead gives $(F(b)+C)-(F(a)+C)$, the same number.`,
+        R`**Continuity matters.** $F$ must be an antiderivative on the whole interval. If a formula for $F$ jumps (as $\tan\frac x2$-based answers do at $x=\pi$), split the interval at the jump and use one-sided limits on each piece. This site does that automatically.`,
+      ],
+      example: 'sin x', bounds: ['0', 'pi'],
+    },
+    {
+      id: 'intProps', name: 'Properties of Definite Integrals', short: 'Limits & Splitting', cat: 'intdef',
+      statement: R`\int_a^a f=0,\qquad \int_a^b f=-\int_b^a f,\qquad \int_a^b f=\int_a^c f+\int_c^b f`,
+      summary: 'Equal limits give zero, swapping the limits flips the sign, and an interval can be split at any point.',
+      provedFrom: ['ftc'],
+      proof: [
+        R`With $F'=f$, each follows from the Fundamental Theorem:`,
+        R`$$\int_a^a f = F(a)-F(a)=0,\qquad \int_b^a f = F(a)-F(b) = -\bigl(F(b)-F(a)\bigr),$$`,
+        R`$$\int_a^c f+\int_c^b f=\bigl(F(c)-F(a)\bigr)+\bigl(F(b)-F(c)\bigr)=F(b)-F(a).\ \blacksquare$$`,
+        R`Splitting is how the site handles a point where the integrand blows up, or where the antiderivative formula jumps: each piece is evaluated on its own.`,
+      ],
+      example: 'x^2', bounds: ['1', '0'],
+    },
+    {
+      id: 'intOddSym', name: 'Odd Function on a Symmetric Interval', short: 'Odd ⇒ 0', cat: 'intdef',
+      statement: R`f(-x)=-f(x)\;\Longrightarrow\;\int_{-a}^{a} f(x)\,dx = 0`,
+      summary: 'An odd function has as much area below the axis on one side as above it on the other, so they cancel. No antiderivative needed.',
+      provedFrom: ['intProps', 'uSub'],
+      proof: [
+        R`Split at $0$ and substitute $x=-u$ in the left half ($dx=-du$):`,
+        R`$$\int_{-a}^{0} f(x)\,dx=\int_{a}^{0} f(-u)\,(-du)=\int_0^a f(-u)\,du=-\int_0^a f(u)\,du.$$`,
+        R`Adding the right half $\int_0^a f$ gives $0$. $\blacksquare$`,
+        R`**Caution.** This needs $\int_0^a f$ to converge. $\int_{-1}^{1}\frac{dx}{x}$ and $\int_{-\infty}^{\infty}x\,dx$ diverge, even though the integrands are odd.`,
+      ],
+      example: 'x^3 cos x', bounds: ['-1', '1'],
+    },
+    {
+      id: 'intEvenSym', name: 'Even Function on a Symmetric Interval', short: 'Even ⇒ 2∫₀', cat: 'intdef',
+      statement: R`f(-x)=f(x)\;\Longrightarrow\;\int_{-a}^{a} f(x)\,dx = 2\int_{0}^{a} f(x)\,dx`,
+      summary: 'An even function is a mirror image across the y-axis, so the two halves have equal area.',
+      provedFrom: ['intProps', 'uSub'],
+      proof: [
+        R`As for odd functions, substitute $x=-u$ in the left half: $\int_{-a}^0 f(x)\,dx=\int_0^a f(-u)\,du=\int_0^a f(u)\,du$. Adding the right half gives $2\int_0^a f$. $\blacksquare$ The same holds with $a=\infty$.`,
+      ],
+      example: 'e^(-x^2)', bounds: ['-inf', 'inf'],
+    },
+    {
+      id: 'improperDef', name: 'Improper Integrals', short: 'Improper', cat: 'intdef',
+      statement: R`\int_a^{\infty} f(x)\,dx = \lim_{t\to\infty}\int_a^{t} f(x)\,dx,\qquad \int_a^{b} f(x)\,dx = \lim_{t\to a^{+}}\int_t^{b} f(x)\,dx`,
+      summary: 'When a limit is infinite, or the integrand blows up at an end, integrate up to a movable point and take a limit. If that limit is finite the integral converges; otherwise it diverges.',
+      provedFrom: ['ftc', 'limit'],
+      proof: [
+        R`**Definition.** A Riemann sum needs a bounded function on a bounded interval. Otherwise the integral is **defined** as a limit of ordinary integrals. With an antiderivative $F$, $\int_a^t f=F(t)-F(a)$, so`,
+        R`$$\int_a^\infty f(x)\,dx=\lim_{t\to\infty}F(t)-F(a).$$`,
+        R`**Examples.** $\int_1^\infty\frac{dx}{x^2}=\lim_{t\to\infty}\left(1-\frac1t\right)=1$ converges. $\int_1^\infty\frac{dx}{x}=\lim_{t\to\infty}\ln t=\infty$ diverges. $\int_0^1\frac{dx}{\sqrt x}=2-\lim_{t\to0^+}2\sqrt t=2$ converges.`,
+        R`**Both ends, or a bad point inside.** Split the interval so that each piece has only one problem point. The integral converges only if **every** piece converges. So $\int_{-1}^{1}\frac{dx}{x^2}$ diverges, because $\int_0^1\frac{dx}{x^2}=\infty$.`,
+        R`This site finds the limits of $F$ numerically and then names the exact value when it recognizes it (rational multiples of $\pi$, $\sqrt\pi$, $\ln 2$, …).`,
+      ],
+      example: '1/x^2', bounds: ['1', 'inf'],
+    },
+    {
+      id: 'numericInt', name: 'Numerical Integration', short: 'Numerical', cat: 'intdef',
+      statement: R`\int_a^b f(x)\,dx \approx \frac{\Delta x}{2}\Bigl[f(x_0)+2f(x_1)+\cdots+2f(x_{n-1})+f(x_n)\Bigr]`,
+      summary: 'When no antiderivative can be written down, approximate the area directly. This site uses a high-accuracy (tanh–sinh) rule. The Riemann-sum card shows the simpler rules converging.',
+      provedFrom: ['riemannDef'],
+      proof: [
+        R`**Trapezoid rule.** Replacing each rectangle by a trapezoid averages the left and right Riemann sums. Its error is at most $\frac{(b-a)^3}{12n^2}\max|f''|$, so doubling $n$ cuts the error by about 4.`,
+        R`**Simpson's rule** fits parabolas through triples of points. Its error shrinks like $1/n^4$.`,
+        R`**Double-exponential (tanh–sinh) quadrature** substitutes $x=\tanh\left(\frac\pi2\sinh t\right)$, which crowds sample points toward the ends where integrands are often badly behaved. A plain sum in $t$ then converges extremely fast, often to 15 digits with a few hundred points. Infinite intervals use the similar map $x=e^{\frac\pi2\sinh t}$. This site halves the step until two estimates agree.`,
+        R`A numerical answer is shown with $\approx$. Functions such as $e^{-x^2}$, $\sin(x^2)$ and $\frac{\sin x}{x}$ have no elementary antiderivative, so on most intervals this is the only option.`,
+      ],
+      example: 'e^(-x^2)', bounds: ['0', '1'],
+    },
+    {
+      id: 'gaussianInt', name: 'Gaussian Integral', short: '∫ e^(−x²)', cat: 'intdef',
+      statement: R`\int_{-\infty}^{\infty} e^{-ax^{2}}\,dx = \sqrt{\frac{\pi}{a}}\qquad(a>0)`,
+      summary: 'e^(−x²) has no elementary antiderivative, yet its total area is exactly √π. It underlies the normal distribution.',
+      provedFrom: ['improperDef', 'intEvenSym', 'uSub'],
+      proof: [
+        R`Let $I=\int_{-\infty}^\infty e^{-x^2}dx$. Square it and write the product as a double integral over the plane:`,
+        R`$$I^2=\int_{-\infty}^\infty\!\int_{-\infty}^\infty e^{-(x^2+y^2)}\,dx\,dy.$$`,
+        R`In polar coordinates $x^2+y^2=r^2$ and $dx\,dy=r\,dr\,d\theta$:`,
+        R`$$I^2=\int_0^{2\pi}\!\int_0^\infty e^{-r^2}r\,dr\,d\theta=2\pi\cdot\Bigl[-\tfrac12e^{-r^2}\Bigr]_0^\infty=\pi.$$`,
+        R`Since $I>0$, $I=\sqrt\pi$. For $e^{-ax^2}$ substitute $u=\sqrt a\,x$: the integral becomes $\frac{1}{\sqrt a}\sqrt\pi$. $\blacksquare$ (The change to polar coordinates is a two-variable fact, used here without proof.)`,
+      ],
+      example: 'e^(-x^2)', bounds: ['-inf', 'inf'],
+    },
+    {
+      id: 'dirichletInt', name: 'Dirichlet Integral', short: '∫ sin x / x', cat: 'intdef',
+      statement: R`\int_{0}^{\infty} \frac{\sin x}{x}\,dx = \frac{\pi}{2}`,
+      summary: 'The area under sin x / x converges (slowly, because the waves cancel) to exactly π/2. Scaling x does not change it.',
+      provedFrom: ['improperDef', 'cyclicParts', 'intAtanForm'],
+      proof: [
+        R`Introduce a damping factor: $I(t)=\int_0^\infty e^{-tx}\frac{\sin x}{x}\,dx$ for $t\ge0$. Differentiating under the integral sign removes the $x$:`,
+        R`$$I'(t)=-\int_0^\infty e^{-tx}\sin x\,dx=-\frac{1}{1+t^2},$$`,
+        R`where the last integral is the cyclic integration-by-parts result $\int e^{-tx}\sin x\,dx$ evaluated from $0$ to $\infty$.`,
+        R`So $I(t)=-\arctan t+C$. As $t\to\infty$ the damping kills the integral, $I(t)\to0$, so $C=\frac\pi2$. Then $I(0)=\frac\pi2$. $\blacksquare$`,
+        R`For $\frac{\sin kx}{x}$ with $k>0$, substituting $u=kx$ gives the same value. (Differentiating under the integral sign and the limit $t\to0^+$ need justification that is skipped here.)`,
+      ],
+      example: 'sin x / x', bounds: ['0', 'inf'],
+    },
+    {
+      id: 'sinc2Int', name: 'Integral of sin²x / x²', short: '∫ sin²x / x²', cat: 'intdef',
+      statement: R`\int_{0}^{\infty} \frac{\sin^{2}(kx)}{x^{2}}\,dx = \frac{k\pi}{2}\qquad(k>0)`,
+      summary: 'Integration by parts turns it into the Dirichlet integral.',
+      provedFrom: ['byParts', 'dirichletInt'],
+      proof: [
+        R`Take $u=\sin^2x$ and $dv=\frac{dx}{x^2}$, so $du=\sin2x\,dx$ and $v=-\frac1x$. The boundary term $-\frac{\sin^2x}{x}$ vanishes at both $0$ and $\infty$, leaving`,
+        R`$$\int_0^\infty\frac{\sin^2x}{x^2}\,dx=\int_0^\infty\frac{\sin2x}{x}\,dx=\frac\pi2$$`,
+        R`by the Dirichlet integral. For $\sin^2(kx)$, substitute $u=kx$. $\blacksquare$`,
+      ],
+      example: 'sin(x)^2/x^2', bounds: ['0', 'inf'],
+    },
+    {
+      id: 'gammaInt', name: 'Gamma Integral (n!)', short: '∫ xⁿe^(−x) = n!', cat: 'intdef',
+      statement: R`\int_{0}^{\infty} x^{n} e^{-ax}\,dx = \frac{n!}{a^{n+1}}\qquad(a>0,\ n=0,1,2,\dots)`,
+      summary: 'Each round of integration by parts lowers the power and pulls out a factor, building up n!.',
+      provedFrom: ['improperDef', 'byParts'],
+      proof: [
+        R`Let $I_n=\int_0^\infty x^ne^{-ax}dx$. Parts with $u=x^n$ and $dv=e^{-ax}dx$ gives`,
+        R`$$I_n=\Bigl[-\tfrac1a x^ne^{-ax}\Bigr]_0^\infty+\frac na\int_0^\infty x^{n-1}e^{-ax}dx=\frac na I_{n-1}.$$`,
+        R`The boundary term vanishes, because $e^{-ax}$ beats any power of $x$. Since $I_0=\frac1a$, induction gives $I_n=\frac{n!}{a^{n+1}}$. $\blacksquare$`,
+        R`The same integral with any real $n>-1$ defines the Gamma function, $\Gamma(n+1)$.`,
+      ],
+      example: 'x^3 e^(-x)', bounds: ['0', 'inf'],
+    },
+    {
+      id: 'boseInt', name: 'Integral of xⁿ / (eˣ − 1)', short: '∫ x/(eˣ−1)', cat: 'intdef',
+      statement: R`\int_{0}^{\infty}\frac{x}{e^{x}-1}\,dx=\frac{\pi^{2}}{6},\qquad \int_{0}^{\infty}\frac{x^{3}}{e^{x}-1}\,dx=\frac{\pi^{4}}{15}`,
+      summary: 'Expanding 1/(eˣ−1) as a geometric series reduces it to Gamma integrals and the sum 1 + 1/4 + 1/9 + ⋯ = π²/6.',
+      provedFrom: ['gammaInt'],
+      proof: [
+        R`For $x>0$, $\frac{1}{e^x-1}=\frac{e^{-x}}{1-e^{-x}}=\sum_{k=1}^\infty e^{-kx}$. Integrating term by term with the Gamma integral:`,
+        R`$$\int_0^\infty\frac{x^n}{e^x-1}\,dx=\sum_{k=1}^\infty\int_0^\infty x^ne^{-kx}\,dx=n!\sum_{k=1}^\infty\frac{1}{k^{n+1}}.$$`,
+        R`With the Basel sum $\sum\frac1{k^2}=\frac{\pi^2}6$ and $\sum\frac1{k^4}=\frac{\pi^4}{90}$, this gives $\frac{\pi^2}6$ for $n=1$ and $6\cdot\frac{\pi^4}{90}=\frac{\pi^4}{15}$ for $n=3$. $\blacksquare$ (The Basel sums and the term-by-term integration are quoted, not proved here.)`,
+      ],
+      example: 'x/(e^x-1)', bounds: ['0', 'inf'],
+    },
+    {
+      id: 'lnSinInt', name: 'Integral of ln(sin x)', short: '∫ ln sin x', cat: 'intdef',
+      statement: R`\int_{0}^{\pi/2}\ln(\sin x)\,dx=\int_{0}^{\pi/2}\ln(\cos x)\,dx=-\frac{\pi}{2}\ln 2`,
+      summary: 'A classic trick: the sin and cos versions are equal, and adding them uses sin 2x = 2 sin x cos x to bring back the same integral.',
+      provedFrom: ['intProps', 'uSub'],
+      proof: [
+        R`Let $I=\int_0^{\pi/2}\ln\sin x\,dx$. Substituting $x=\frac\pi2-u$ shows it also equals $\int_0^{\pi/2}\ln\cos x\,dx$. Add the two:`,
+        R`$$2I=\int_0^{\pi/2}\ln(\sin x\cos x)\,dx=\int_0^{\pi/2}\ln\frac{\sin2x}{2}\,dx=\int_0^{\pi/2}\ln\sin 2x\,dx-\frac\pi2\ln2.$$`,
+        R`With $t=2x$, $\int_0^{\pi/2}\ln\sin2x\,dx=\frac12\int_0^\pi\ln\sin t\,dt=\frac12\cdot2I=I$, by the symmetry of $\sin$ about $\frac\pi2$. So $2I=I-\frac\pi2\ln2$, and $I=-\frac\pi2\ln2$. $\blacksquare$`,
+      ],
+      example: 'ln(sin x)', bounds: ['0', 'pi/2'],
     },
   ];
 

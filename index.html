@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Calculus Solver — step-by-step derivatives and integrals</title>
-  <meta name="description" content="Differentiate and integrate single-variable functions step by step: substitution, integration by parts, partial fractions, trig integrals and more. Every rule links to its statement, a proof, and a map of how the rules are proved from one another.">
+  <meta name="description" content="Differentiate and integrate single-variable functions step by step: substitution, integration by parts, partial fractions, trig integrals, definite and improper integrals with Riemann sums, and more. Every rule links to its statement, a proof, and a map of how the rules are proved from one another.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23233a7a'/%3E%3Ctext x='32' y='46' font-family='Georgia,serif' font-size='40' font-style='italic' text-anchor='middle' fill='%23fff'%3E%E2%88%82%3C/text%3E%3C/svg%3E">
   <link rel="stylesheet" href="vendor/katex/katex.min.css">
   <link rel="stylesheet" href="css/style.css">
@@ -107,7 +107,13 @@
       <div class="derive-grid">
       <div class="card calc">
         <div class="input-row">
-          <div class="ddx int-sign" aria-hidden="true">∫</div>
+          <div class="int-limits" title="Fill in both limits for a definite integral; leave both empty for an indefinite one">
+            <input id="ihi" class="bound" type="text" inputmode="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+                   placeholder="b" aria-label="Upper limit (leave both limits empty for an indefinite integral)">
+            <div class="int-sign" aria-hidden="true">∫</div>
+            <input id="ilo" class="bound" type="text" inputmode="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+                   placeholder="a" aria-label="Lower limit (leave both limits empty for an indefinite integral)">
+          </div>
           <div class="input-wrap">
             <div id="ifx"></div>
             <input id="ifxText" type="text" inputmode="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
@@ -137,6 +143,10 @@
             <div><code>sin^3 x</code>, <code>cos^2 x</code>, <code>sec^3 x</code>, <code>sin(3x)cos(2x)</code></div><div>trig powers, half-angle, reduction, product-to-sum</div>
             <div><code>sqrt(1-x^2)</code>, <code>sqrt(x^2+1)</code>, <code>1/(x^2+1)^2</code></div><div>trigonometric substitution</div>
             <div><code>1/(1+cos x)</code>, <code>1/(2+sin x)</code></div><div>tangent half-angle substitution</div>
+            <div>Fill in both limits around the <span class="sw">∫</span>, e.g. <code>0</code> and <code>pi/2</code>; leave both empty for an antiderivative</div><div>definite integrals (FTC)</div>
+            <div><code>inf</code>, <code>-inf</code>, <code>∞</code> as a limit; integrands that blow up at a point</div><div>improper integrals</div>
+            <div><code>x^3 cos x</code> on [−1, 1], <code>e^(-x^2)</code> on (−∞, ∞), <code>sin x / x</code> on [0, ∞)</div><div>symmetry and famous integrals</div>
+            <div><code>e^(-x^2)</code> on [0, 1], <code>sin(x^2)</code></div><div>numerical, with Riemann sums</div>
             <div>Input works the same as for derivatives: <kbd>/</kbd> fraction, <kbd>^</kbd> exponent, <kbd>Tab</kbd> autocomplete</div><div>input</div>
           </div>
         </details>
@@ -193,7 +203,7 @@
   </main>
 
   <footer class="foot">
-    <p>Angles are in radians. <code>log</code> without a base means base 10. Letters other than the chosen variable are treated as constants (and, for integrals, as positive).</p>
+    <p>Angles are in radians. <code>log</code> without a base means base 10. Letters other than the chosen variable are treated as constants (and, for integrals, as positive). Integral limits must be numbers; <code>inf</code> or <code>∞</code> gives an improper integral.</p>
   </footer>
 
   <!-- ========== RULE DRAWER ========== -->
@@ -213,6 +223,7 @@
   <script src="js/simplify.js"></script>
   <script src="js/derive.js"></script>
   <script src="js/integrate.js"></script>
+  <script src="js/definite.js"></script>
   <script src="js/rules.js"></script>
   <script src="js/proofmap.js"></script>
   <script src="js/app.js"></script>

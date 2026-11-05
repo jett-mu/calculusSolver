@@ -1,6 +1,6 @@
 # Calculus Solver
 
-A static, dependency-free website that differentiates and integrates single-variable functions **step by step**.
+A static, dependency-free website that differentiates and integrates single-variable functions **step by step**, including definite and improper integrals.
 Every step names the rule it uses. Clicking a rule shows:
 - the rule's statement
 - a proof (back to the limit definition)
@@ -25,6 +25,13 @@ Every step names the rule it uses. Clicking a rule shows:
   - the tangent half-angle (Weierstrass) substitution
 
   Every candidate answer is differentiated numerically and compared with the integrand before it is shown. The result card also shows the symbolic derivative as a check, with a button that opens it in the derivative tab. Integrands with no elementary antiderivative (`e^(x^2)`, `sin x / x`, `1/ln x`, `x^x` and others) are recognized and named.
+- **Definite and improper integrals**: fill in the limits above and below the ∫ (e.g. `0` and `pi/2`; `inf`, `-inf` or `∞` for improper integrals). Leave both empty for an antiderivative. The routes, tried in this order:
+  - odd symmetry on [−a, a], which gives 0 even without an antiderivative
+  - the Fundamental Theorem of Calculus, using the antiderivative from the indefinite integrator. The interval is split where the integrand blows up or where the antiderivative formula jumps (e.g. tangent half-angle answers at x = π). ∞ limits and singular endpoints become limits of F, which are found numerically and then named exactly when recognized (π/2, √π, ln 2, …). Values at nice angles are exact (sin(π/6) = 1/2, arctan 1 = π/4).
+  - a table of famous definite integrals: Gaussian, Dirichlet (sin x / x), sin²x/x², Gamma (xⁿe^(−ax) = n!/aⁿ⁺¹), x/(eˣ−1) = π²/6 and ln(sin x) on [0, π/2]
+  - numerical double-exponential (tanh–sinh / exp–sinh) quadrature, shown with ≈
+
+  Divergent integrals are detected and reported (to ±∞, or no limit). Every exact answer is checked against the numerical value before it is shown. A **Riemann sums** card plots the integrand with its signed area, and draws left, right, midpoint or trapezoid strips with an n slider, the error, and a convergence table.
 - **Visual math input**: the equation renders as you type, with the cursor inside the math.
   - `/` builds a stacked fraction, `^` an exponent and `_` a log base; `(` and `|` add auto-sizing brackets; `sqrt`, `cbrt` and `abs` turn into √▢, ∛▢ and |▢|.
   - Function names are colored by rule family (trig, inverse trig, exp/log, hyperbolic …), in the same colors as the rule chips and the Proof Map.
@@ -33,7 +40,7 @@ Every step names the rule it uses. Clicking a rule shows:
   - The **Text** button switches to a plain-text input; both modes share links.
 - **Sidebar**: a "Rules used" list (in order of first use, with how many steps use each rule) and a list of examples. Hovering a rule highlights the steps that use it, and hovering a step highlights its rules. On narrow screens the sidebar moves under the result.
 - **Options**: higher-order derivatives (up to 4th), a choice of variable (x, t, y, z, u, s, θ), and other letters treated as constants.
-- **Rule Library**: 104 rules, each with a statement and a proof:
+- **Rule Library**: 117 rules, each with a statement and a proof:
   - Foundations (ε–δ limits, limit laws, squeeze theorem, special limits, *e*)
   - Basic rules
   - Techniques (implicit and logarithmic differentiation, inverse function theorem)
@@ -41,8 +48,9 @@ Every step names the rule it uses. Clicking a rule shows:
   - All six trig functions, inverse trig, hyperbolic and inverse hyperbolic functions
   - Roots and absolute value
   - Integration basics (antiderivatives and +C, from the Mean Value Theorem), a table of common integrals, and integration techniques. Each is proved from the derivative rule it reverses.
+  - Definite integrals: Riemann sums, the Fundamental Theorem of Calculus, properties and symmetry, improper integrals, numerical integration and the famous results above
 - **Proof Map**: a pan-and-zoom DAG of how every rule is proved from the others, tracing back to the definition of a limit.
-- **Shareable links**: links such as `#d=sin(x^2)`, `#tab=integrate&i=x%20e%5Ex`, `#rule=byParts` and `#tab=map` open the exact view.
+- **Shareable links**: links such as `#d=sin(x^2)`, `#tab=integrate&i=x%20e%5Ex`, `#tab=integrate&i=x%5E2&lo=0&hi=1`, `#rule=byParts` and `#tab=map` open the exact view.
 - **Offline**: works offline and straight from `file://`. KaTeX is vendored in `vendor/katex/` and nothing else is loaded.
 
 ## Project layout
@@ -55,6 +63,7 @@ js/mathfield.js     WYSIWYG, color-coded equation editor (serializes to parser s
 js/simplify.js      canonical simplifier + presentation pass
 js/derive.js        step-tracing differentiator
 js/integrate.js     step-tracing integrator (strategy search, polynomial tools, answer checking)
+js/definite.js      definite & improper integrals (FTC with splitting and limits, symmetry, known results, quadrature)
 js/rules.js         rule database: statements, proofs, provedFrom graph
 js/proofmap.js      DAG layout + SVG rendering
 js/app.js           UI wiring
@@ -76,6 +85,7 @@ The suite checks:
 - every derivative against a numeric finite difference at random points (~100 functions, plus 2nd derivatives)
 - every antiderivative (~120 integrands): its numeric derivative must equal the integrand
 - exact integral forms, the techniques each integral uses, and detection of non-elementary integrals
+- definite integrals (~50): values, exact forms, the method used, improper and divergent cases, and agreement with Simpson's rule
 - exact output forms
 - rule tagging
 - the parser

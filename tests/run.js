@@ -4,9 +4,10 @@
  * 3. Parser checks.
  * 4. Math field: text → model → text round trips, keystroke editing, error mapping.
  * 5. Integrals: every antiderivative is differentiated numerically and compared with the integrand;
- *    exact forms, technique tagging, and non-elementary detection. */
+ *    exact forms, technique tagging, and non-elementary detection.
+ * 6. Definite integrals: values, exact forms, methods, improper integrals and divergence. */
 const path = require('path');
-['ast', 'parser', 'simplify', 'derive', 'integrate', 'rules', 'mathfield'].forEach((f) => require(path.join(__dirname, '..', 'js', f + '.js')));
+['ast', 'parser', 'simplify', 'derive', 'integrate', 'definite', 'rules', 'mathfield'].forEach((f) => require(path.join(__dirname, '..', 'js', f + '.js')));
 const Calc = globalThis.Calc;
 
 let pass = 0, fail = 0;
@@ -206,6 +207,108 @@ for (const src of ['e^(x^2)', 'e^(-x^2)', 'sin(x^2)', 'sin x / x', 'e^x/x', '1/l
   ok(flag === true, `non-elementary ${src}: got ${flag}`);
 }
 
+/* ---------------- definite integrals ---------------- */
+// [integrand, lower, upper, value (number, Infinity / -Infinity, or 'div'), exact TeX or null, method or null]
+const DEFINITE = [
+  ['x^2', '0', '1', 1 / 3, '\\frac{1}{3}', 'ftc'],
+  ['3x^2 - 4x + 1', '-1', '2', 6, '6', 'ftc'],
+  ['sin x', '0', 'pi', 2, '2', 'ftc'],
+  ['cos x', '0', 'pi/2', 1, '1', 'ftc'],
+  ['1/(1+x^2)', '0', '1', Math.PI / 4, '\\frac{\\pi}{4}', 'ftc'],
+  ['1/x', '1', 'e', 1, '1', 'ftc'],
+  ['e^x', '0', 'ln 2', 1, '1', 'ftc'],
+  ['sqrt(1-x^2)', '-1', '1', Math.PI / 2, '\\frac{\\pi}{2}', 'ftc'],
+  ['x e^x', '0', '1', 1, '1', 'ftc'],
+  ['|x|', '-1', '2', 2.5, '\\frac{5}{2}', 'ftc'],
+  ['1/(x(x+1))', '1', 'inf', Math.LN2, '\\ln 2', 'ftc'],
+  ['x^2', '1', '0', -1 / 3, '-\\frac{1}{3}', 'ftc'],
+  ['x^2', '2', '2', 0, '0', 'equal'],
+  ['a x', '0', '1', null, '\\frac{a}{2}', 'ftc'],
+  ['e^(-a x)', '0', 'inf', null, '\\frac{1}{a}', 'ftc'],
+  // F jumps (tangent half-angle answer) — split and use one-sided limits
+  ['1/(2+sin x)', '0', '2pi', (2 * Math.PI) / Math.sqrt(3), null, 'ftc'],
+  ['1/(5+4cos x)', '0', '2pi', (2 * Math.PI) / 3, '\\frac{2\\pi}{3}', 'ftc'],
+  // symmetry
+  ['x^3 cos x', '-1', '1', 0, '0', 'symmetry'],
+  ['sin(x^3)', '-2', '2', 0, '0', 'symmetry'],
+  ['x e^(-x^2)', '-inf', 'inf', 0, '0', 'symmetry'],
+  // improper, convergent
+  ['1/sqrt(x)', '0', '1', 2, '2', 'ftc'],
+  ['ln x', '0', '1', -1, '-1', 'ftc'],
+  ['1/x^2', '1', 'inf', 1, '1', 'ftc'],
+  ['e^(-x)', '0', 'inf', 1, '1', 'ftc'],
+  ['x^3 e^(-x)', '0', 'inf', 6, '6', 'ftc'],
+  ['1/(1+x^2)', '-inf', 'inf', Math.PI, '\\pi', 'ftc'],
+  ['1/sqrt(1-x^2)', '0', '1', Math.PI / 2, '\\frac{\\pi}{2}', 'ftc'],
+  ['1/cbrt(x)', '-1', '1', 0, '0', null],
+  // famous results
+  ['e^(-x^2)', '-inf', 'inf', Math.sqrt(Math.PI), '\\sqrt{\\pi}', 'table'],
+  ['e^(-x^2)', '0', 'inf', Math.sqrt(Math.PI) / 2, '\\frac{\\sqrt{\\pi}}{2}', 'table'],
+  ['3e^(-2x^2)', '-inf', 'inf', 3 * Math.sqrt(Math.PI / 2), null, 'table'],
+  ['sin x / x', '0', 'inf', Math.PI / 2, '\\frac{\\pi}{2}', 'table'],
+  ['sin(x)^2/x^2', '0', 'inf', Math.PI / 2, '\\frac{\\pi}{2}', 'table'],
+  ['x/(e^x-1)', '0', 'inf', (Math.PI * Math.PI) / 6, '\\frac{\\pi^{2}}{6}', 'table'],
+  ['ln(sin x)', '0', 'pi/2', (-Math.PI / 2) * Math.LN2, null, 'table'],
+  // numerical
+  ['e^(-x^2)', '0', '1', 0.746824132812427, null, 'numeric'],
+  ['sin(x^2)', '0', '1', 0.310268301723381, null, 'numeric'],
+  ['e^(-x^2)', '1', '0', -0.746824132812427, null, 'numeric'],
+  // divergent
+  ['1/x', '1', 'inf', Infinity, null, null],
+  ['1/x', '0', '1', Infinity, null, null],
+  ['1/x^2', '-1', '1', Infinity, null, null],
+  ['tan x', '0', 'pi/2', Infinity, null, null],
+  ['1/x', '-1', '1', 'div', null, null],
+  ['cos x', '0', 'inf', 'div', null, null],
+  ['x', '-inf', 'inf', 'div', null, null],
+  ['1/x', 'inf', '1', -Infinity, null, null],
+];
+for (const [src, lo, hi, want, wantTex, wantMethod] of DEFINITE) {
+  let r;
+  const t0 = Date.now();
+  try { r = Calc.definite(Calc.parse(src), 'x', lo, hi); } catch (e) { ok(false, `definite ${src} on [${lo}, ${hi}] threw: ${e.message}`); continue; }
+  const label = `definite ${src} on [${lo}, ${hi}]`;
+  if (want === 'div') ok(r.divergent === 'osc', `${label}: want divergent, got ${r.divergent} ${r.resultTex}`);
+  else if (want === Infinity || want === -Infinity) ok(r.divergent === Math.sign(want), `${label}: want ${want}, got ${r.divergent} ${r.resultTex || r.approxTex}`);
+  else {
+    ok(!r.divergent, `${label}: unexpectedly divergent`);
+    if (want !== null) ok(Math.abs(r.approx - want) <= 1e-8 * Math.max(1, Math.abs(want)), `${label}: want ${want}, got ${r.approx}`);
+  }
+  if (wantTex) ok(r.resultTex === wantTex, `${label}: want ${wantTex}, got ${r.resultTex}`);
+  if (wantMethod) ok(r.method === wantMethod, `${label}: want method ${wantMethod}, got ${r.method}`);
+  ok(r.steps.length === 1 && r.steps[0].lhsTex && r.steps[0].lhsTex.startsWith('\\int_'), `${label}: has a step tree`);
+  ok(Date.now() - t0 < 3000, `${label}: took ${Date.now() - t0} ms`);
+}
+// exact answers agree with an independent Simpson's rule on proper integrals
+{
+  const simpson = (f, a, b, n) => { const h = (b - a) / n; let s = f(a) + f(b); for (let i = 1; i < n; i++) s += (i % 2 ? 4 : 2) * f(a + i * h); return (s * h) / 3; };
+  for (const [src, lo, hi] of [['x^3 - x', '0', '2'], ['e^x sin x', '0', 'pi'], ['x^2 arctan x', '0', '1'], ['sec^3 x', '0', 'pi/4'], ['1/(x^2+2x+5)', '-1', '1'], ['ln x', '1', 'e'], ['x sqrt(x+1)', '0', '3']]) {
+    const t = Calc.parse(src);
+    const r = Calc.definite(t, 'x', lo, hi);
+    const a = Calc.parseBound(lo).val, b = Calc.parseBound(hi).val;
+    const s = simpson((x) => Calc.evaluate(t, { x }), a, b, 2000);
+    ok(r.method === 'ftc' && r.result && Math.abs(r.approx - s) < 1e-8, `definite ${src} on [${lo}, ${hi}]: ${r.resultTex} = ${r.approx} vs Simpson ${s}`);
+  }
+}
+// bounds
+for (const bad of ['x', 'a', '', '1/0', 'sqrt(-1)']) {
+  let threw = false;
+  try { Calc.parseBound(bad, 'x'); } catch (e) { threw = e instanceof Calc.BoundError; }
+  ok(threw, `bad bound "${bad}" rejected`);
+}
+for (const [src, val] of [['pi/2', Math.PI / 2], ['inf', Infinity], ['-∞', -Infinity], ['oo', Infinity], ['sqrt(2)', Math.SQRT2], ['-1', -1], ['e', Math.E]]) {
+  let got;
+  try { got = Calc.parseBound(src, 'x').val; } catch (e) { got = 'ERR ' + e.message; }
+  ok(got === val || Math.abs(got - val) < 1e-15, `bound ${src}: want ${val} got ${got}`);
+}
+{
+  let msg = '';
+  try { Calc.definite(Calc.parse('ln x'), 'x', '-1', '1'); } catch (e) { msg = e.undefinedRegion ? 'undefined' : e.message; }
+  ok(msg === 'undefined', 'ln x on [-1, 1] is reported as undefined there: ' + msg);
+  const r = Calc.definite(Calc.parse('t^2'), 't', '0', '3');
+  ok(r.resultTex === '9' && r.steps[0].lhsTex.endsWith('\\,dt'), 'definite integral in t: ' + r.resultTex);
+}
+
 // rule database integrity
 if (Calc.RULES) {
   const ids = new Set(Calc.RULES.map((r) => r.id));
@@ -217,13 +320,15 @@ if (Calc.RULES) {
   const emitted = new Set();
   for (const [src] of NUMERIC) Calc.derive(Calc.parse(src), 'x', 1).rules.forEach((r) => emitted.add(r));
   for (const [src] of INTEGRALS) { try { Calc.integrate(Calc.parse(src), 'x').rules.forEach((r) => emitted.add(r)); } catch (e) { /* reported above */ } }
+  for (const [src, lo, hi] of DEFINITE) { try { Calc.definite(Calc.parse(src), 'x', lo, hi).rules.forEach((r) => emitted.add(r)); } catch (e) { /* reported above */ } }
   // every rule's example parses, and integration examples actually integrate
   for (const r of Calc.RULES) {
     if (!r.example) continue;
     let okEx = true;
     try {
       const t = Calc.parse(r.example);
-      if (Calc.INT_CATS.has(r.cat)) Calc.integrate(t, 'x'); else Calc.derive(t, 'x', 1);
+      if (r.bounds) { const d = Calc.definite(t, 'x', r.bounds[0], r.bounds[1]); okEx = d.divergent === 0 && isFinite(d.approx); }
+      else if (Calc.INT_CATS.has(r.cat)) Calc.integrate(t, 'x'); else Calc.derive(t, 'x', 1);
     } catch (e) { okEx = false; }
     ok(okEx, `rule ${r.id} example "${r.example}" works`);
   }

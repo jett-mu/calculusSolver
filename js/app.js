@@ -50,12 +50,16 @@
   function makeSolver(cfg) {
     const ids = cfg.ids;
     const el = (name) => document.getElementById(ids[name]);
-    const S = { cfg, expr: cfg.defaultExpr, v: 'x', n: 1, field: null, textMode: false, timer: null };
+    const S = { cfg, expr: cfg.defaultExpr, v: 'x', n: 1, lo: '', hi: '', field: null, textMode: false, timer: null, rm: { method: 'mid', n: 8 } };
 
     const getSrc = () => (S.textMode ? el('text').value : S.field.getText());
     S.setSrc = (s) => {
       S.field.setText(s);
       el('text').value = S.textMode ? s : S.field.getText();
+    };
+    S.setBounds = (lo, hi) => {
+      S.lo = lo || ''; S.hi = hi || '';
+      if (cfg.hasBounds) { el('lo').value = S.lo; el('hi').value = S.hi; }
     };
     S.focus = () => { if (S.textMode) el('text').focus(); else S.field.focus(); };
     S.setMode = (text, focus) => {
@@ -77,11 +81,13 @@
     S.run = () => {
       const src = getSrc();
       S.expr = src;
+      if (cfg.hasBounds) { S.lo = el('lo').value; S.hi = el('hi').value; }
       if (state.tab === cfg.tab) writeHash();
       const pv = el('preview'), out = el('output'), ans = el('answer');
       el('field').classList.remove('err');
       el('text').classList.remove('err');
       pv.classList.remove('err');
+      if (cfg.hasBounds) { el('lo').classList.remove('err'); el('hi').classList.remove('err'); }
       if (!src.trim()) {
         pv.innerHTML = '';
         ans.innerHTML = `<div class="card hint"><h2>${cfg.emptyTitle}</h2><p>${cfg.emptyText}</p></div>`;
@@ -109,14 +115,33 @@
       }
       if (!S.textMode) S.field.clearError();
       const v = S.v;
+      // limits of integration: both filled → definite; one filled → a hint, and the indefinite integral meanwhile
+      let bounds = null, boundHint = '';
+      if (cfg.hasBounds && (S.lo.trim() || S.hi.trim())) {
+        if (S.lo.trim() && S.hi.trim()) {
+          try {
+            bounds = { lo: Calc.parseBound(S.lo, v), hi: Calc.parseBound(S.hi, v) };
+          } catch (e) {
+            const which = (() => { try { Calc.parseBound(S.lo, v); return 'hi'; } catch (x) { return 'lo'; } })();
+            el(which).classList.add('err');
+            pv.classList.add('err');
+            pv.innerHTML = `<span>${which === 'lo' ? 'Lower' : 'Upper'} limit: ${esc(e.message)}</span>`;
+            return;
+          }
+        } else {
+          boundHint = `<span class="note">add the ${S.lo.trim() ? 'upper' : 'lower'} limit for a definite integral, or clear both</span>`;
+        }
+      }
+      S.bounds = bounds;
       const fName = 'f(' + vtex(v) + ')';
       const consts = Array.from(Calc.freeVars(tree)).filter((x) => x !== v);
       pv.innerHTML = `<span class="lbl">Interpreted as</span> ${k(fName + ' = ' + Calc.tex(tree))}` +
+        (bounds ? `<span class="note">on ${k(intervalTex(bounds.lo, bounds.hi, v))}</span>` : '') + boundHint +
         (consts.length ? `<span class="note">treating ${consts.map((c) => k(vtex(c))).join(', ')} as constant${consts.length > 1 ? 's' : ''}</span>` : '') +
         (!Calc.contains(tree, v) && !consts.length ? `<span class="note">(no ${k(vtex(v))} in this expression, so it is a constant)</span>` : '');
       let res;
       try {
-        res = cfg.engine(tree, v, S.n);
+        res = cfg.engine(tree, v, S.n, S);
       } catch (e) {
         ans.innerHTML = cfg.errorCard(e);
         out.innerHTML = '';
@@ -125,14 +150,18 @@
       }
       S.renderResult(tree, res);
     };
+    S.tree = null;
 
     S.renderResult = (tree, res) => {
+      S.tree = tree; S.res = res;
       el('answer').innerHTML = cfg.answerCard(tree, res, S);
+      if (cfg.afterAnswer) cfg.afterAnswer(tree, res, S, el('answer'));
       let html = `<div class="card steps">
         <div class="steps-head"><h2>Step by step</h2>
           <div class="actions"><button class="btn-ghost" data-act="expand">Expand all</button><button class="btn-ghost" data-act="collapse">Collapse all</button></div>
         </div>`;
-      if (cfg.stepsNote) html += `<p class="steps-note">${cfg.stepsNote}</p>`;
+      const note = typeof cfg.stepsNote === 'function' ? cfg.stepsNote(res) : cfg.stepsNote;
+      if (note) html += `<p class="steps-note">${note}</p>`;
       const names = ['', 'First derivative', 'Second derivative', 'Third derivative', 'Fourth derivative'];
       res.steps.forEach((st, i) => {
         if (res.steps.length > 1) {
@@ -148,8 +177,9 @@
 
     function stepHTML(st, depth) {
       const lhs = st.lhsTex || dOp(1, S.v) + '\\left[' + st.exprTex + '\\right]';
-      const eq = lhs + ' = ' + st.resultTex;
-      const hasBody = !!(st.formula || st.setup || st.note || st.children.length);
+      const rel = st.rel || '=';
+      const eq = lhs + ' ' + rel + ' ' + st.resultTex;
+      const hasBody = !!(st.formula || st.setup || st.note || st.back || st.children.length);
       const open = depth < 2 && (st.children.length > 0 || depth === 0);
       let body = '';
       if (st.formula) {
@@ -163,7 +193,7 @@
       if (st.children.length) work += '<ol>' + st.children.map((c) => stepHTML(c, depth + 1)).join('') + '</ol>';
       if (st.back) work += `<div class="work back"><span class="lbl">${esc(st.backLabel || 'Back-substitute')}</span>${k(st.back)}</div>`;
       if (st.combinedTex) work += `<div class="work"><span class="eq">${/^I = /.test(st.combinedTex) ? '' : '='}</span>${k(st.combinedTex)}</div>`;
-      if (st.setup || st.combinedTex || st.children.length) work += `<div class="work final"><span class="eq">=</span>${k(st.resultTex)}</div>`;
+      if (st.setup || st.combinedTex || st.children.length) work += `<div class="work final"><span class="eq">${k(rel)}</span>${k(st.resultTex)}</div>`;
       body += work;
       return `<li class="step${open ? ' open' : ''}">
         <div class="step-row">
@@ -218,11 +248,17 @@
     };
 
     S.init = () => {
-      el('examples').innerHTML = cfg.examples.map((e) => {
+      const exItem = (e) => {
+        const it = typeof e === 'string' ? { e } : e;
         let math;
-        try { math = k(cfg.exampleTex(Calc.parse(e))); } catch (err) { math = esc(e); }
-        return `<button class="ex-item" data-ex="${esc(e)}" title="${esc(e)}">${math}</button>`;
-      }).join('');
+        try { math = k(cfg.exampleTex(Calc.parse(it.e), it)); } catch (err) { math = esc(it.e); }
+        const b = it.lo !== undefined ? ` data-lo="${esc(it.lo)}" data-hi="${esc(it.hi)}"` : '';
+        const title = it.lo !== undefined ? `${it.e}  from ${it.lo} to ${it.hi}` : it.e;
+        return `<button class="ex-item" data-ex="${esc(it.e)}"${b} title="${esc(title)}">${math}</button>`;
+      };
+      el('examples').innerHTML = cfg.exampleGroups
+        ? cfg.exampleGroups.map((g) => `<div class="ex-group">${esc(g.title)}</div>` + g.items.map(exItem).join('')).join('')
+        : cfg.examples.map(exItem).join('');
       if (matchMedia('(max-width: 900px)').matches) el('exPanel').open = false;
       S.field = Calc.MathField.mount(el('field'), {
         label: cfg.fieldLabel,
@@ -231,6 +267,10 @@
         onEnter: () => { clearTimeout(S.timer); S.run(); },
       });
       el('text').addEventListener('input', S.schedule);
+      if (cfg.hasBounds) ['lo', 'hi'].forEach((b) => {
+        el(b).addEventListener('input', S.schedule);
+        el(b).addEventListener('keydown', (e) => { if (e.key === 'Enter') { clearTimeout(S.timer); S.run(); } });
+      });
       el('text').addEventListener('keydown', (e) => { if (e.key === 'Enter') { clearTimeout(S.timer); S.run(); } });
       el('mode').addEventListener('click', () => { S.setMode(!S.textMode, true); S.run(); });
       el('varSel').addEventListener('change', () => { S.v = el('varSel').value; S.updateLabel(); S.run(); });
@@ -244,7 +284,7 @@
       if (cfg.hasOrder) el('orderSel').value = String(S.n);
       S.updateLabel();
     };
-    S.owns = (node) => node && (el('ruleList').contains(node) || el('output').contains(node) || el('examples').contains(node));
+    S.owns = (node) => node && (el('ruleList').contains(node) || el('output').contains(node) || el('examples').contains(node) || el('answer').contains(node));
     return S;
   }
 
@@ -254,6 +294,238 @@
   const INT_EXAMPLES = ['x^2', '3x^2 - 4x + 1', '1/x', 'e^(3x)', 'sin(2x)', 'x cos(x^2)', 'x e^x', 'ln x', 'e^x sin x',
     '1/(x^2+4)', '(2x+3)/(x^2+3x+2)', '1/(x^2-1)', '1/(x^2(x+1))', 'sin^3 x', 'cos^2 x', 'tan x', 'sec x', 'sec^3 x',
     'sqrt(1-x^2)', 'x^2 arctan x', '1/(x^2+2x+5)', 'sin(3x)cos(2x)', '1/(1+cos x)'];
+  const DEF_EXAMPLES = [
+    { e: 'x^2', lo: '0', hi: '1' }, { e: 'sin x', lo: '0', hi: 'pi' }, { e: '1/(1+x^2)', lo: '0', hi: '1' },
+    { e: 'x^3 cos x', lo: '-1', hi: '1' }, { e: 'sqrt(1-x^2)', lo: '-1', hi: '1' }, { e: '1/(2+sin x)', lo: '0', hi: '2pi' },
+    { e: '1/sqrt(x)', lo: '0', hi: '1' }, { e: '1/x^2', lo: '1', hi: 'inf' }, { e: '1/x', lo: '1', hi: 'inf' },
+    { e: 'x^3 e^(-x)', lo: '0', hi: 'inf' }, { e: 'e^(-x^2)', lo: '-inf', hi: 'inf' }, { e: 'sin x / x', lo: '0', hi: 'inf' },
+    { e: 'e^(-x^2)', lo: '0', hi: '1' }, { e: 'sin(x^2)', lo: '0', hi: 'sqrt(pi)' },
+  ];
+  const intBody = (t) => (t.type === 'add' ? '\\left(' + Calc.tex(t) + '\\right)' : Calc.tex(t));
+  const boundTex = (src) => { try { return Calc.parseBound(src).tex; } catch (e) { return esc(src); } };
+  function intervalTex(lo, hi, v) {
+    const vt = vtex(v);
+    if (lo.val > hi.val) return lo.tex + ' \\ge ' + vt + ' \\ge ' + hi.tex;
+    return (lo.inf ? '(' : '[') + lo.tex + ', ' + hi.tex + (hi.inf ? ')' : ']');
+  }
+
+  /* ---------------- definite integrals: answer card ---------------- */
+  const METHOD = {
+    ftc: ['ftc', 'Fundamental Theorem of Calculus'], symmetry: ['intOddSym', 'Symmetry'], table: [null, 'A known integral'],
+    numeric: ['numericInt', 'Numerical'], equal: ['intProps', 'Equal limits'],
+  };
+  function definiteCard(tree, res, S) {
+    const v = S.v, vt = vtex(v);
+    const lhs = '\\int_{' + res.lo.tex + '}^{' + res.hi.tex + '} ' + intBody(tree) + '\\,d' + vt;
+    let math, notes = '';
+    if (res.divergent) {
+      math = lhs + (res.divergent === 1 ? ' = \\infty' : res.divergent === -1 ? ' = -\\infty' : '');
+      const why = res.divergent !== 'osc' ? ' to ' + k(res.divergent === 1 ? '+\\infty' : '-\\infty')
+        : res.why ? '' : res.steps[0].children.length > 2
+          ? ': one piece goes to ' + k('+\\infty') + ' and another to ' + k('-\\infty') + ', and ' + k('\\infty - \\infty') + ' has no value'
+          : ': the limit does not exist';
+      notes += `<p class="verdict diverge">The integral <strong>diverges</strong>${why}.</p>`;
+      if (res.why) notes += `<p class="note">${esc(res.why)}</p>`;
+    } else if (res.result) {
+      const exact = res.resultTex;
+      const dec = res.approxTex;
+      const showDec = dec !== null && dec.replace(/\s/g, '') !== exact.replace(/\s/g, '');
+      math = lhs + ' = ' + exact + (showDec ? ' \\approx ' + dec : '');
+    } else {
+      math = lhs + ' \\approx ' + res.approxTex;
+      if (res.why) notes += `<p class="note">${esc(res.why)}</p>`;
+      if (res.guessTex) notes += `<p class="note">The digits match ${k(res.guessTex)}, which may be the exact value (not proved).</p>`;
+    }
+    if (res.improper && !res.divergent) notes += `<p class="note">An improper integral, evaluated as a limit. It <strong>converges</strong>.</p>`;
+    const m = METHOD[res.method] || [null, ''];
+    const ruleId = m[0] || res.rules.find((r) => /Int$/.test(r) && Calc.RULE_BY_ID[r] && Calc.RULE_BY_ID[r].cat === 'intdef' && r !== 'numericInt');
+    const badge = ruleId ? `<span class="method">via ${chip(ruleId)}</span>` : '';
+    let check = '';
+    if (res.antideriv) {
+      const a = res.antideriv;
+      let src = '';
+      try { src = Calc.str(Calc.present(a.result)); } catch (e) { src = ''; }
+      check = `<div class="check"><span class="lbl">Antiderivative</span>${k('F(' + vt + ') = ' + a.resultTex)}
+        ${a.check ? `<span class="ok" title="Verified by evaluating both sides at sample points">✓ F′ = f</span>` : ''}
+        ${src ? `<button class="btn-ghost" data-differentiate="${esc(src)}" data-v="${esc(v)}">Differentiate it step by step</button>` : ''}</div>`;
+    }
+    return `<div class="card answer">
+        <div class="eyebrow">Result ${badge}</div>
+        <div class="answer-math">${k(math, true)}</div>
+        ${notes}${check}
+      </div>`;
+  }
+
+  /* ---------------- definite integrals: Riemann sums card ---------------- */
+  const Riemann = (() => {
+    const PADL = 44, PADR = 14, PADT = 14, PADB = 30;
+    let W = 640, H = 270;
+    const METHODS = [['left', 'Left'], ['right', 'Right'], ['mid', 'Midpoint'], ['trap', 'Trapezoid']];
+    const fmt = (x, sig) => {
+      if (!isFinite(x)) return x > 0 ? '∞' : x < 0 ? '−∞' : '—';
+      const a = Math.abs(x);
+      const t = a !== 0 && (a < 1e-4 || a >= 1e8) ? x.toExponential((sig || 8) - 1) : String(Number(x.toPrecision(sig || 8)));
+      return t.replace('-', '−');
+    };
+    const pretty = (src) => String(src).replace(/-?\s*(inf|infinity|oo)/i, (m) => (m.trim()[0] === '-' ? '−∞' : '∞')).replace(/pi/g, 'π').replace(/sqrt/g, '√').replace(/^-/, '−');
+    function sampler(tree, v) {
+      const env = {};
+      const raw = (x) => { env[v] = x; return Calc.evaluate(tree, env); };
+      // a removable hole (sin x / x at 0) takes its neighbour's value
+      return (x) => { const y = raw(x); if (isFinite(y)) return y; const d = 1e-9 * Math.max(1, Math.abs(x)); const l = raw(x - d), r = raw(x + d); return isFinite(l) && isFinite(r) ? (l + r) / 2 : isFinite(r) ? r : l; };
+    }
+    function sums(f, a, b, n) {
+      const h = (b - a) / n;
+      let L = 0, R = 0, M = 0;
+      for (let i = 0; i < n; i++) { L += f(a + i * h); R += f(a + (i + 1) * h); M += f(a + (i + 0.5) * h); }
+      return { left: L * h, right: R * h, mid: M * h, trap: ((L + R) / 2) * h };
+    }
+    // a window that shows the interesting part of an infinite interval
+    function windowFor(f, a, b) {
+      if (isFinite(a) && isFinite(b)) return [a, b];
+      const span = (from, dir) => {
+        let mx = 0; const xs = [];
+        for (let i = 0; i <= 400; i++) { const x = from + dir * (i / 400) * 50; const y = Math.abs(f(x)); xs.push([x, y]); if (isFinite(y)) mx = Math.max(mx, y); }
+        let far = 2;
+        for (const [x, y] of xs) if (isFinite(y) && y >= 0.02 * mx) far = Math.max(far, Math.abs(x - from));
+        return Math.min(50, far * 1.15);
+      };
+      if (!isFinite(a) && !isFinite(b)) { const r = Math.max(span(0, 1), span(0, -1)); return [-r, r]; }
+      if (isFinite(a)) return [a, a + span(a, 1)];
+      return [b - span(b, -1), b];
+    }
+    function mount(slot, tree, res, S) {
+      if (res.plot.consts) return;
+      const f = sampler(tree, S.v);
+      const a = res.lo.val, b = res.hi.val;
+      const lo = Math.min(a, b), hi = Math.max(a, b);
+      const [wa, wb] = windowFor(f, lo, hi);
+      const proper = !res.improper && isFinite(lo) && isFinite(hi);
+      const exact = res.divergent ? null : res.approx;
+      const sign = a > b ? -1 : 1;
+      const data = { f, a: wa, b: wb, lo, hi, proper, exact, sign, sing: res.plot.sing || [], loLabel: pretty(res.lo.src), hiLabel: pretty(res.hi.src) };
+      let table = '';
+      if (proper) {
+        const rows = [4, 16, 64, 256, 1024].map((n) => {
+          const s = sums(f, lo, hi, n);
+          return `<tr><td>${n}</td>${METHODS.map(([m]) => `<td>${fmt(sign * s[m], 9)}</td>`).join('')}</tr>`;
+        }).join('');
+        table = `<details class="rtable-wrap"><summary>Convergence table</summary><div class="rtable-scroll"><table class="rtable">
+          <thead><tr><th>n</th>${METHODS.map(([, t]) => `<th>${t}</th>`).join('')}</tr></thead><tbody>${rows}</tbody>
+          ${exact !== null ? `<tfoot><tr><td>exact</td><td colspan="4">${fmt(exact, 12)}</td></tr></tfoot>` : ''}</table></div></details>`;
+      }
+      const ctl = proper ? `<div class="r-ctl">
+          <div class="seg" role="group" aria-label="Sample points">${METHODS.map(([m, t]) => `<button type="button" data-rm="${m}" aria-pressed="${S.rm.method === m}">${t}</button>`).join('')}</div>
+          <label class="r-n"><span>n = <output data-rn-out>${S.rm.n}</output></span><input type="range" min="1" max="200" step="1" value="${S.rm.n}" data-rn aria-label="Number of strips"></label>
+        </div>
+        <div class="r-read" data-rread></div>` : '';
+      const note = proper ? '' : `<p class="note">${res.improper ? 'This integral is improper, so Riemann sums over the whole interval do not apply directly. ' : ''}The plot shows ${isFinite(lo) && isFinite(hi) ? '' : 'part of '}the region whose signed area is the integral${!isFinite(lo) || !isFinite(hi) ? ', for ' + k(vtex(S.v) + ' \\in [' + fmt(wa, 3) + ', ' + fmt(wb, 3) + ']') : ''}.</p>`;
+      const card = document.createElement('div');
+      card.className = 'card riemann';
+      card.innerHTML = `<div class="r-head"><h2>${proper ? 'Riemann sums' : 'Area'}</h2><span class="r-legend"><i class="sw-pos"></i>above the axis counts +<i class="sw-neg"></i>below counts −</span></div>
+        ${ctl}<div class="r-plot" data-rplot></div>${note}${table}`;
+      slot.appendChild(card);
+      S.riemann = { card, data };
+      draw(S);
+    }
+    function draw(S) {
+      const R = S.riemann;
+      if (!R) return;
+      const { f, a, b, lo, hi, proper, exact, sign, sing } = R.data;
+      // draw at the real pixel width so labels stay readable on phones
+      const host = $('[data-rplot]', R.card);
+      W = Math.max(280, Math.round(host.clientWidth || 640));
+      H = Math.round(Math.max(200, Math.min(300, W * 0.42)));
+      const span = b - a || 1;
+      const xa = proper ? a - 0.06 * span : a, xb = proper ? b + 0.06 * span : b;
+      const N = 480;
+      const pts = [];
+      for (let i = 0; i <= N; i++) { const x = xa + ((xb - xa) * i) / N; pts.push([x, f(x)]); }
+      // y-range from the bulk of the values, so a pole does not flatten everything
+      const ys = pts.map((p) => p[1]).filter(isFinite).sort((p, q) => p - q);
+      let y0 = ys.length ? ys[Math.floor(ys.length * 0.03)] : -1, y1 = ys.length ? ys[Math.ceil(ys.length * 0.97) - 1] : 1;
+      y0 = Math.min(0, y0); y1 = Math.max(0, y1);
+      if (y1 - y0 < 1e-9) { y1 += 1; y0 -= 1; }
+      const pad = (y1 - y0) * 0.08; y0 -= y0 < 0 ? pad : 0; y1 += pad;
+      const X = (x) => PADL + ((x - xa) / (xb - xa)) * (W - PADL - PADR);
+      const Y = (y) => PADT + ((y1 - y) / (y1 - y0)) * (H - PADT - PADB);
+      const clampY = (y) => Math.max(-5, Math.min(H + 5, Y(y)));
+      const nearSing = (x) => sing.some((s) => Math.abs(x - s) < (xb - xa) / N);
+      // curve, broken at holes and poles
+      let path = '', pen = false;
+      for (const [x, y] of pts) {
+        if (!isFinite(y) || nearSing(x)) { pen = false; continue; }
+        path += (pen ? 'L' : 'M') + X(x).toFixed(1) + ' ' + clampY(y).toFixed(1);
+        pen = true;
+      }
+      // shaded area over [lo, hi] ∩ window
+      const sa = Math.max(lo, a), sb = Math.min(hi, b);
+      let area = '';
+      if (sb > sa) {
+        const M = 360;
+        area = 'M' + X(sa).toFixed(1) + ' ' + Y(0).toFixed(1);
+        for (let i = 0; i <= M; i++) { const x = sa + ((sb - sa) * i) / M; const y = f(x); area += 'L' + X(x).toFixed(1) + ' ' + (isFinite(y) ? clampY(y) : Y(0)).toFixed(1); }
+        area += 'L' + X(sb).toFixed(1) + ' ' + Y(0).toFixed(1) + 'Z';
+      }
+      // rectangles / trapezoids
+      let rects = '';
+      if (proper) {
+        const n = S.rm.n, m = S.rm.method, h = (hi - lo) / n;
+        for (let i = 0; i < n; i++) {
+          const l = lo + i * h, r = l + h;
+          if (m === 'trap') {
+            const fl = f(l), fr = f(r);
+            rects += `<path d="M${X(l).toFixed(1)} ${Y(0).toFixed(1)}L${X(l).toFixed(1)} ${clampY(fl).toFixed(1)}L${X(r).toFixed(1)} ${clampY(fr).toFixed(1)}L${X(r).toFixed(1)} ${Y(0).toFixed(1)}Z"/>`;
+          } else {
+            const y = f(m === 'left' ? l : m === 'right' ? r : l + h / 2);
+            const top = clampY(y), base = Y(0);
+            rects += `<rect x="${X(l).toFixed(1)}" y="${Math.min(top, base).toFixed(1)}" width="${Math.max(0.5, X(r) - X(l)).toFixed(1)}" height="${Math.abs(base - top).toFixed(1)}"/>`;
+          }
+        }
+      }
+      // axes and labels
+      const ticks = (() => {
+        const step = Math.pow(10, Math.floor(Math.log10((y1 - y0) / 3)));
+        const mult = [1, 2, 5, 10].find((mm) => (y1 - y0) / (step * mm) <= 5) || 10;
+        const st = step * mult, out = [];
+        for (let t = Math.ceil(y0 / st) * st; t <= y1 + 1e-12; t += st) out.push(Math.abs(t) < st * 1e-9 ? 0 : t);
+        return out;
+      })();
+      const yAxis = ticks.map((t) => `<line class="r-grid" x1="${PADL}" x2="${W - PADR}" y1="${Y(t).toFixed(1)}" y2="${Y(t).toFixed(1)}"/><text class="r-tick" x="${PADL - 6}" y="${(Y(t) + 4).toFixed(1)}" text-anchor="end">${fmt(t, 3)}</text>`).join('');
+      const bLabel = (x, lab) => (x >= xa && x <= xb ? `<line class="r-bound" x1="${X(x).toFixed(1)}" x2="${X(x).toFixed(1)}" y1="${PADT}" y2="${H - PADB}"/><text class="r-blab" x="${X(x).toFixed(1)}" y="${H - PADB + 18}" text-anchor="middle">${esc(lab)}</text>` : '');
+      const [loLab, hiLab] = sign < 0 ? [R.data.hiLabel, R.data.loLabel] : [R.data.loLabel, R.data.hiLabel];
+      const xEnds = !isFinite(lo) || !isFinite(hi) ? `<text class="r-tick" x="${PADL}" y="${H - PADB + 18}" text-anchor="start">${fmt(xa, 3)}</text><text class="r-tick" x="${W - PADR}" y="${H - PADB + 18}" text-anchor="end">${fmt(xb, 3)}</text>` : '';
+      const id = 'rc' + Math.random().toString(36).slice(2, 8);
+      const svg = `<svg viewBox="0 0 ${W} ${H}" class="r-svg" role="img" aria-label="Graph of the integrand with the area${proper ? ' and Riemann rectangles' : ''}">
+        <defs><clipPath id="${id}p"><rect x="0" y="0" width="${W}" height="${Y(0).toFixed(1)}"/></clipPath><clipPath id="${id}n"><rect x="0" y="${Y(0).toFixed(1)}" width="${W}" height="${H}"/></clipPath>
+          <clipPath id="${id}f"><rect x="${PADL}" y="${PADT - 2}" width="${W - PADL - PADR}" height="${H - PADT - PADB + 4}"/></clipPath></defs>
+        ${yAxis}
+        <g clip-path="url(#${id}f)">
+          ${area ? `<path class="r-pos" d="${area}" clip-path="url(#${id}p)"/><path class="r-neg" d="${area}" clip-path="url(#${id}n)"/>` : ''}
+          <g class="r-rects">${rects}</g>
+          <path class="r-curve" d="${path}"/>
+        </g>
+        <line class="r-axis" x1="${PADL}" x2="${W - PADR}" y1="${Y(0).toFixed(1)}" y2="${Y(0).toFixed(1)}"/>
+        ${isFinite(lo) ? bLabel(lo, loLab) : ''}${isFinite(hi) ? bLabel(hi, hiLab) : ''}${xEnds}
+      </svg>`;
+      $('[data-rplot]', R.card).innerHTML = svg;
+      if (proper) {
+        const s = sums(f, lo, hi, S.rm.n);
+        const val = sign * s[S.rm.method];
+        const name = METHODS.find((mm) => mm[0] === S.rm.method)[1];
+        $('[data-rread]', R.card).innerHTML = `<span><span class="lbl">${name} sum</span> ${fmt(val, 9)}</span>` +
+          (exact !== null ? `<span><span class="lbl">Exact</span> ${fmt(exact, 9)}</span><span><span class="lbl">Error</span> ${fmt(val - exact, 3)}</span>` : '');
+        $('[data-rn-out]', R.card).textContent = S.rm.n;
+        $$('[data-rm]', R.card).forEach((btn) => btn.setAttribute('aria-pressed', String(btn.dataset.rm === S.rm.method)));
+      }
+    }
+    return { mount, draw };
+  })();
+  let resizeTimer = null;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => Object.values(solvers).forEach((s) => { if (s.riemann && s.riemann.card.isConnected) Riemann.draw(s); }), 120);
+  });
 
   const derive = makeSolver({
     tab: 'derive', hashKey: 'd', hasOrder: true, defaultExpr: 'x^2 sin(x)',
@@ -277,22 +549,30 @@
 
   const integrate = makeSolver({
     tab: 'integrate', hashKey: 'i', hasOrder: false, defaultExpr: 'x e^x',
-    ids: { field: 'ifx', text: 'ifxText', mode: 'imodeBtn', varSel: 'ivarSel', label: 'idxLabel', preview: 'ipreview',
+    ids: { field: 'ifx', text: 'ifxText', mode: 'imodeBtn', varSel: 'ivarSel', label: 'idxLabel', preview: 'ipreview', lo: 'ilo', hi: 'ihi',
       answer: 'ianswer', output: 'ioutput', ruleList: 'iruleList', rulesMeta: 'irulesMeta', examples: 'iexamples', exPanel: 'iexPanel' },
     examples: INT_EXAMPLES,
-    exampleTex: (t) => '\\int ' + (t.type === 'add' ? '\\left(' + Calc.tex(t) + '\\right)' : Calc.tex(t)) + '\\,dx',
+    exampleGroups: [{ title: 'Definite & improper', items: DEF_EXAMPLES }, { title: 'Antiderivatives', items: INT_EXAMPLES }],
+    exampleTex: (t, it) => '\\int' + (it && it.lo !== undefined ? '_{' + boundTex(it.lo) + '}^{' + boundTex(it.hi) + '}' : '') + ' ' + intBody(t) + '\\,dx',
+    hasBounds: true,
     fieldLabel: 'Function to integrate',
     placeholder: 'Type an integrand, e.g. x e^x',
     labelTex: (S) => 'd' + vtex(S.v),
-    engine: (tree, v) => Calc.integrate(tree, v),
+    engine: (tree, v, n, S) => (S.bounds ? Calc.definite(tree, v, S.lo, S.hi) : Calc.integrate(tree, v)),
     emptyTitle: 'Type an integrand to begin',
     emptyText: 'Pick one from the examples, or try <code>x^2 e^x</code>, <code>1/(x^2-4)</code> or <code>sin^2 x cos^3 x</code>. Each step names the technique it uses. Click a technique to see why it works and which derivative rule it reverses.',
     rulesEmpty: 'Rules appear here once there is an integral.',
-    stepsNote: 'Each step leaves out its own constant. They are all collected into the single + C in the result.',
-    errorCard: (e) => e.nonElementary
+    stepsNote: (res) => (res.definite
+      ? (res.antideriv ? 'The antiderivative leaves out + C: it would cancel in F(b) − F(a).' : '')
+      : 'Each step leaves out its own constant. They are all collected into the single + C in the result.'),
+    errorCard: (e) => e.undefinedRegion
+      ? `<div class="card hint"><h2>Undefined on this interval</h2><p>${esc(e.message)} Try an interval inside the integrand's domain.</p></div>`
+      : e.nonElementary
       ? `<div class="card hint"><h2>No elementary antiderivative</h2><p>${esc(e.message)} Elementary functions are those built from polynomials, roots, exponentials, logarithms and trig functions. No combination of them has this derivative (a theorem of Liouville).</p></div>`
       : `<div class="card hint"><h2>Couldn't integrate that</h2><p>${esc(e.message)} Try rewriting the integrand, or check whether it has an elementary antiderivative at all.</p></div>`,
+    afterAnswer: (tree, res, S, slot) => { if (res.definite) Riemann.mount(slot, tree, res, S); },
     answerCard: (tree, res, S) => {
+      if (res.definite) return definiteCard(tree, res, S);
       const v = S.v, vt = vtex(v);
       const integrand = Calc.tex(tree);
       const lhs = '\\int ' + (tree.type === 'add' ? '\\left(' + integrand + '\\right)' : integrand) + '\\,d' + vt;
@@ -322,6 +602,7 @@
     state.tab = p.get('tab') || (p.has('i') ? 'integrate' : 'derive');
     if (p.has('d')) derive.expr = p.get('d');
     if (p.has('i')) integrate.expr = p.get('i');
+    if (p.has('i') || p.has('lo') || p.has('hi')) { integrate.lo = p.get('lo') || ''; integrate.hi = p.get('hi') || ''; }
     const active = solvers[state.tab];
     if (active && p.has('v')) active.v = p.get('v');
     if (p.has('n')) derive.n = Math.max(1, Math.min(4, parseInt(p.get('n'), 10) || 1));
@@ -336,6 +617,7 @@
       if (derive.n !== 1) p.set('n', derive.n);
     } else if (state.tab === 'integrate') {
       p.set('i', integrate.expr);
+      if (integrate.lo || integrate.hi) { p.set('lo', integrate.lo); p.set('hi', integrate.hi); }
       if (integrate.v !== 'x') p.set('v', integrate.v);
     }
     if (state.rule) p.set('rule', state.rule);
@@ -370,12 +652,14 @@
     const isInt = Calc.INT_CATS && Calc.INT_CATS.has(r.cat);
     const from = r.provedFrom.length ? r.provedFrom.map(chip).join('') : '<span class="none">Nothing. This is a starting point (a definition).</span>';
     const used = r.usedFor.length ? r.usedFor.map(chip).join('') : '<span class="none">Not used to prove other rules here.</span>';
-    const tryLabel = isInt ? `Try it: ∫ ${esc(r.example || '')} dx` : `Try it: d/dx [ ${esc(r.example || '')} ]`;
+    let tryLabel = isInt ? `Try it: ∫ ${esc(r.example || '')} dx` : `Try it: d/dx [ ${esc(r.example || '')} ]`;
+    if (r.bounds) { try { tryLabel = 'Try it: ' + k('\\int_{' + boundTex(r.bounds[0]) + '}^{' + boundTex(r.bounds[1]) + '} ' + intBody(Calc.parse(r.example)) + '\\,dx'); } catch (e) { /* keep the text label */ } }
+    const tryBounds = r.bounds ? ` data-try-lo="${esc(r.bounds[0])}" data-try-hi="${esc(r.bounds[1])}"` : '';
     $('#drawerBody').innerHTML = `
       <h2 id="drawerTitle">${esc(r.name)}</h2>
       <div class="statement cat-${r.cat}">${k(r.statement, true)}</div>
       <p class="summary">${rich(r.summary)}</p>
-      ${r.example ? `<div class="drawer-actions"><button class="btn" data-try="${esc(r.example)}" data-try-tab="${isInt ? 'integrate' : 'derive'}">${tryLabel}</button></div>` : ''}
+      ${r.example ? `<div class="drawer-actions"><button class="btn" data-try="${esc(r.example)}" data-try-tab="${isInt ? 'integrate' : 'derive'}"${tryBounds}>${tryLabel}</button></div>` : ''}
       <h3>Proof</h3>
       <div class="proof">${proofHTML(r.proof)}</div>
       <h3>Proved from</h3>
@@ -440,10 +724,11 @@
   }
 
   // load an expression into a calculator and show it
-  function load(solver, src, v) {
+  function load(solver, src, v, bounds) {
     closeRule();
     showTab(solver.cfg.tab);
     if (solver.cfg.hasOrder) solver.n = 1;
+    if (solver.cfg.hasBounds) solver.setBounds(bounds ? bounds[0] : '', bounds ? bounds[1] : '');
     solver.v = v || 'x';
     solver.syncControls();
     solver.setSrc(src);
@@ -460,6 +745,7 @@
       s.init();
       s.setMode(savedMode === 'text', false);
       s.setSrc(s.expr);
+      if (s.cfg.hasBounds) s.setBounds(s.lo, s.hi);
       s.syncControls();
     });
     showTab(state.tab);
@@ -482,16 +768,23 @@
       try { localStorage.setItem('cs-theme', nxt); } catch (e) { /* storage unavailable */ }
     });
     window.addEventListener('hashchange', () => {
-      const prev = Object.fromEntries(Object.entries(solvers).map(([id, s]) => [id, [s.expr, s.v, s.n].join('|')]));
+      const sig = (s) => [s.expr, s.v, s.n, s.lo, s.hi].join('|');
+      const prev = Object.fromEntries(Object.entries(solvers).map(([id, s]) => [id, sig(s)]));
       readHash();
       Object.entries(solvers).forEach(([id, s]) => {
-        if ([s.expr, s.v, s.n].join('|') !== prev[id]) { s.setSrc(s.expr); s.syncControls(); s.run(); }
+        if (sig(s) !== prev[id]) { s.setSrc(s.expr); if (s.cfg.hasBounds) s.setBounds(s.lo, s.hi); s.syncControls(); s.run(); }
       });
       showTab(state.tab);
       if (state.rule) openRule(state.rule, { noFocus: true });
       else if ($('#drawer').classList.contains('open')) closeRule();
     });
 
+    document.addEventListener('input', (e) => {
+      const r = e.target.closest && e.target.closest('[data-rn]');
+      if (!r) return;
+      const s = solverFor(r);
+      if (s) { s.rm.n = parseInt(r.value, 10) || 1; Riemann.draw(s); }
+    });
     document.addEventListener('mouseover', (e) => {
       const item = e.target.closest('.rule-list .rule-item');
       if (item) { const s = solverFor(item); if (s) s.highlightRule(item.dataset.rule); return; }
@@ -507,9 +800,18 @@
       const ruleEl = t.closest('[data-rule]');
       if (ruleEl && ruleEl.tagName === 'BUTTON') { openRule(ruleEl.dataset.rule); return; }
       const ex = t.closest('[data-ex]');
-      if (ex) { const s = solverFor(ex); if (s) { s.setSrc(ex.dataset.ex); s.run(); s.focus(); } return; }
+      if (ex) {
+        const s = solverFor(ex);
+        if (s) {
+          if (s.cfg.hasBounds) s.setBounds(ex.dataset.lo || '', ex.dataset.hi || '');
+          s.setSrc(ex.dataset.ex); s.run(); s.focus();
+        }
+        return;
+      }
       const tr = t.closest('[data-try]');
-      if (tr) { load(solvers[tr.dataset.tryTab] || derive, tr.dataset.try); return; }
+      if (tr) { load(solvers[tr.dataset.tryTab] || derive, tr.dataset.try, null, tr.dataset.tryLo !== undefined ? [tr.dataset.tryLo, tr.dataset.tryHi] : null); return; }
+      const rm = t.closest('[data-rm]');
+      if (rm) { const s = solverFor(rm); if (s) { s.rm.method = rm.dataset.rm; Riemann.draw(s); } return; }
       const dif = t.closest('[data-differentiate]');
       if (dif) { load(derive, dif.dataset.differentiate, dif.dataset.v); return; }
       const mf = t.closest('[data-mapfocus]');
